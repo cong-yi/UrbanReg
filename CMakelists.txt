@@ -1,0 +1,53 @@
+cmake_minimum_required( VERSION 3.1.2 )
+project(UrbanReg)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMake")
+### Compilation flags: adapt to your needs ###
+if(MSVC)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /bigobj") ### Enable parallel compilation
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR} )
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR} )
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11") #### eigen requires a modern C++ compiler that supports c++11
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "../" )
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations -Wno-unused-parameter -Wno-deprecated-register -Wno-return-type-c-linkage")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations -Wno-unused-parameter -Wno-deprecated-register -Wno-return-type-c-linkage")
+endif()
+
+FIND_PACKAGE(OpenMP REQUIRED)
+if(OPENMP_FOUND)
+	message("OPENMP FOUND")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
+find_package(Eigen3 REQUIRED)
+if(EIGEN3_FOUND)
+	include_directories(${EIGEN3_INCLUDE_DIR})
+else()
+	message(STATUS "NOTICE: Eigen library is not found.") 
+endif()
+
+set(LIBIGL_ROOT_DIR "$ENV{LIBIGL_ROOT}")
+if(NOT LIBIGL_ROOT_DIR)
+	message(FATAL_ERROR "Please point the environment variable LIBIGL_ROOT to the include directory of your libigl installation.")
+else()
+	include_directories("${LIBIGL_ROOT_DIR}/include")
+endif()
+
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CREATURESHOP_RUNTIME_DIR ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CREATURESHOP_RUNTIME_DIR}/Debug)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CREATURESHOP_RUNTIME_DIR}/Release)
+
+MESSAGE("ARCHIVE OUTPUT DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
+MESSAGE("LIBRARY OUTPUT DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+MESSAGE("RUNTIME OUTPUT DIRECTORY ${CREATURESHOP_RUNTIME_DIR}")
+
+set(SSICP_DIR "${PROJECT_SOURCE_DIR}/ScaleStretchICP/")
+set(ICPTESTER_DIR "${PROJECT_SOURCE_DIR}/ICPTester/")
+
+add_subdirectory(${SSICP_DIR})
+add_subdirectory(${ICPTESTER_DIR})
