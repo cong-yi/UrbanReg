@@ -129,7 +129,7 @@ SSICP_PUBLIC void SSICP::FindCorrespondeces()
 
   Z = Eigen::MatrixXd(rows_queries, cols);
   for (size_t i = 0; i < rows_queries; ++i)
-    Z(i) = Y(indices[i].front());
+    Z.row(i) = Y.row(indices[i].front());
 }
 
 SSICP_PUBLIC void SSICP::FindTransformation()
@@ -137,9 +137,8 @@ SSICP_PUBLIC void SSICP::FindTransformation()
   // calculate X_tilde and Z_tilde
   size_t rows = X.rows(), cols = X.cols();
   Eigen::RowVector3d x_c = X.colwise().sum() / static_cast<double>(rows);
-  Eigen::RowVector3d z_c = X.colwise().sum() / static_cast<double>(rows);
-
-  Eigen::MatrixXd X_tilde(X), Z_tilde(X);
+  Eigen::RowVector3d z_c = Z.colwise().sum() / static_cast<double>(rows);
+  Eigen::MatrixXd X_tilde(X), Z_tilde(Z);
   X_tilde.rowwise() -= x_c, Z_tilde.rowwise() -= z_c;
 
   // update R using SVD decomposition
