@@ -57,8 +57,8 @@ SSICP_PUBLIC void SSICP::Initialize()
   Eigen::RowVector3d y_c = Y.colwise().sum() / static_cast<double>(Y.rows());
   Eigen::MatrixXd X_tilde(X), Y_tilde(Y);
   X_tilde.rowwise() -= x_c, Y_tilde.rowwise() -= y_c;
-  Eigen::Matrix3d M_X = (X_tilde.transpose()) * X_tilde;
-  Eigen::Matrix3d M_Y = (Y_tilde.transpose()) * Y_tilde;
+  Eigen::Matrix3d M_X = (X_tilde.transpose().eval()) * X_tilde;
+  Eigen::Matrix3d M_Y = (Y_tilde.transpose().eval()) * Y_tilde;
 
   std::vector<double> evax, evay;
   std::vector<Eigen::Vector3d> evex, evey;
@@ -75,6 +75,7 @@ SSICP_PUBLIC void SSICP::Initialize()
   }
 
   // intial values for R
+  /*
   Eigen::Matrix3d P, Q;
   for (size_t i = 0; i < 3; ++i)
     for (size_t j = 0; j < 3; ++j)
@@ -83,6 +84,10 @@ SSICP_PUBLIC void SSICP::Initialize()
       Q(i, j) = evey[j](i);
     }
   R = Q * (P.transpose());
+  */
+  // before fixing the orientation of the main axises
+  // we use identity for initial R
+  R = Eigen::Matrix3d::Identity();
 
   // intial values for T
   T = y_c - x_c;
