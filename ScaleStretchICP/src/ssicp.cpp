@@ -89,10 +89,11 @@ SSICP_PUBLIC void SSICP::Iterate()
   size_t counter = 0;
   do
   {
-    printf("Iteration #%zu: %lf\n", ++counter, last_e);
+    if (counter++)
+      printf("Iteration #%zu: %lf\n", counter, last_e);
     FindCorrespondeces();
     FindTransformation();
-  } while (Converged());
+  } while (!Converged());
 }
 
 SSICP_PUBLIC void SSICP::FindCorrespondeces()
@@ -179,7 +180,7 @@ SSICP_PUBLIC bool SSICP::Converged()
   e -= 2 * s * Z_tilde.cwiseProduct(X_tilde * (R.transpose())).sum();
   e += Z_tilde.cwiseProduct(Z_tilde).sum();
 
-  double theta = 1 - e / last_e;
+  double theta = last_e > 0 ? 1 - e / last_e : 0;
   bool conv = (theta < epsilon);
   last_e = e;
   return conv;
