@@ -28,7 +28,8 @@ namespace SSICP
 
   SSICP_PUBLIC void OutputTransformed(std::string out_filename);
 
-  SSICP_PUBLIC void Test(const std::string file_name_x, const std::string file_name_y);
+  SSICP_PUBLIC void Test(const std::string &filename_x, const std::string &filename_y,
+    const std::string &out_filename);
 }
 
 #endif

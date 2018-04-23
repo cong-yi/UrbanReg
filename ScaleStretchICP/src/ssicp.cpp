@@ -149,7 +149,7 @@ SSICP_PUBLIC void SSICP::FindTransformation()
   std::cout << V << std::endl;
   Eigen::Vector3d ttt = svd.singularValues();
   std::cout << ttt << std::endl;
-  //std::cout << U * ttt * V << std::endl;
+  std::cout << U * ttt.asDiagonal() * V.transpose() << std::endl;
   std::cout << "H:" << std::endl;
   std::cout << H << std::endl;
   std::cout << (V * (U.transpose())).determinant() << std::endl;
@@ -163,6 +163,7 @@ SSICP_PUBLIC void SSICP::FindTransformation()
       0, 0, -1;
     R = V * I * (U.transpose());
   }
+  std::cout << R << std::endl;
 
   // update s
   double num = Z_tilde.cwiseProduct(X_tilde * (R.transpose())).sum();
@@ -195,19 +196,20 @@ SSICP_PUBLIC bool SSICP::Converged()
 
 SSICP_PUBLIC void SSICP::OutputTransformed(std::string out_filename)
 {
-  Eigen::Matrix3d A = s * X * R.transpose();
+  Eigen::MatrixXd A = s * X * R.transpose();
   A.rowwise() += T;
-  igl::writeOBJ(out_filename, A, Eigen::MatrixXf());
+  igl::writeOBJ(out_filename, A, Eigen::MatrixXi());
 }
 
-SSICP_PUBLIC void SSICP::Test(const std::string file_name_x, const std::string file_name_y)
+SSICP_PUBLIC void SSICP::Test(const std::string &filename_x, const std::string &filename_y,
+  const std::string &out_filename)
 {
   Eigen::MatrixXi F;
-  igl::readOBJ(file_name_x, X, F);
-  igl::readOBJ(file_name_y, Y, F);
+  igl::readOBJ(filename_x, X, F);
+  igl::readOBJ(filename_y, Y, F);
   SetEpsilon(0.01);
 
   Initialize();
   Iterate();
-  OutputTransformed("out.obj");
+  OutputTransformed(out_filename);
 }
