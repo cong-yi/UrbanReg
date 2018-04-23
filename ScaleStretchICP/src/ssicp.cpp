@@ -145,14 +145,6 @@ SSICP_PUBLIC void SSICP::FindTransformation()
   Eigen::Matrix3d H = (X_tilde.transpose().eval()) * Z_tilde;
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(H, Eigen::ComputeFullU | Eigen::ComputeFullV);
   Eigen::Matrix3d U = svd.matrixU(), V = svd.matrixV();
-  std::cout << U << std::endl;
-  std::cout << V << std::endl;
-  Eigen::Vector3d ttt = svd.singularValues();
-  std::cout << ttt << std::endl;
-  std::cout << U * ttt.asDiagonal() * V.transpose() << std::endl;
-  std::cout << "H:" << std::endl;
-  std::cout << H << std::endl;
-  std::cout << (V * (U.transpose())).determinant() << std::endl;
   if ((V * (U.transpose())).determinant() > 0)
     R = V * (U.transpose());
   else
@@ -163,7 +155,6 @@ SSICP_PUBLIC void SSICP::FindTransformation()
       0, 0, -1;
     R = V * I * (U.transpose());
   }
-  std::cout << R << std::endl;
 
   // update s
   double num = Z_tilde.cwiseProduct(X_tilde * (R.transpose())).sum();
