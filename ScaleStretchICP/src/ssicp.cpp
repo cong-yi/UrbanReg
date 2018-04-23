@@ -10,14 +10,17 @@
 #include <igl/writeOBJ.h>
 
 void EigenvaluesAndEigenvectors(const Eigen::Matrix3d &A, std::vector<double> &eigenvalues,
-  std::vector<Eigen::Vector3cd> &eigenvectors)
+  std::vector<Eigen::Vector3d> &eigenvectors)
 {
   Eigen::EigenSolver<Eigen::Matrix3d> es(A);
   eigenvalues.resize(3), eigenvectors.resize(3);
   for (size_t i = 0; i < 3; ++i)
   {
     eigenvalues[i] = es.eigenvalues()[i].real();
-    eigenvectors[i] = es.eigenvectors().col(i);
+    Eigen::Vector3cd ev = es.eigenvectors().col(i);
+    for (size_t j = 0; j < 3; ++j)
+      eigenvectors[i](j) = ev(j).real();
+    eigenvectors[i].normalize();
   }
 
   // sort eigenvalues with eigenvectors
@@ -58,9 +61,10 @@ SSICP_PUBLIC void SSICP::Initialize()
   Eigen::Matrix3d M_Y = (Y_tilde.transpose()) * Y_tilde;
 
   std::vector<double> evax, evay;
-  std::vector<Eigen::Vector3cd> evex, evey;
+  std::vector<Eigen::Vector3d> evex, evey;
   EigenvaluesAndEigenvectors(M_X, evax, evex);
   EigenvaluesAndEigenvectors(M_Y, evay, evey);
+
   a = std::numeric_limits<double>::max(), b = std::numeric_limits<double>::min();
   for (size_t i = 0; i < 3; ++i)
   {
@@ -75,8 +79,8 @@ SSICP_PUBLIC void SSICP::Initialize()
   for (size_t i = 0; i < 3; ++i)
     for (size_t j = 0; j < 3; ++j)
     {
-      P(i, j) = evex[j](i).real();
-      Q(i, j) = evey[j](i).real();
+      P(i, j) = evex[j](i);
+      Q(i, j) = evey[j](i);
     }
   R = Q * (P.transpose());
 
@@ -199,7 +203,7 @@ SSICP_PUBLIC void SSICP::Test(const std::string &filename_x, const std::string &
   Eigen::MatrixXi F;
   igl::readOBJ(filename_x, X, F);
   igl::readOBJ(filename_y, Y, F);
-  SetEpsilon(0.01);
+  SetEpsilon(0.0001);
 
   Initialize();
   Iterate();
