@@ -2,6 +2,10 @@ cmake_minimum_required( VERSION 3.1.2 )
 project(UrbanReg)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMake")
 set(URBANREG_EXTERNAL "${PROJECT_SOURCE_DIR}/external")
+
+option(WITH_RPLY		"Use RPly"			ON)
+option(FLANN_USE_STATIC "Use static FLANN"	ON)
+
 ### Compilation flags: adapt to your needs ###
 if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /bigobj") ### Enable parallel compilation
@@ -36,7 +40,6 @@ else()
 	include_directories("${LIBIGL_ROOT_DIR}/include")
 endif()
 
-option(FLANN_USE_STATIC "Use static FLANN" ON)
 find_package(FLANN REQUIRED)
 
 # find_package(PCL 1.3 REQUIRED COMPONENTS common io)
@@ -58,6 +61,7 @@ set(ICPTESTER_DIR "${PROJECT_SOURCE_DIR}/ICPTester/")
 set(GPSLOC_DIR "${PROJECT_SOURCE_DIR}/GPSLocalizer/")
 set(OVERLAPTRIMMER_DIR "${PROJECT_SOURCE_DIR}/OverlapTrimmer/")
 set(REGPIPELINE_DIR "${PROJECT_SOURCE_DIR}/RegistrationPipeline/")
+set(DATAIO_DIR "${PROJECT_SOURCE_DIR}/DataIO/")
 set(REGEXAMPLE_DIR "${PROJECT_SOURCE_DIR}/RegistrationExample/")
 
 add_subdirectory(${SSICP_DIR})
@@ -65,4 +69,5 @@ add_subdirectory(${ICPTESTER_DIR})
 add_subdirectory(${GPSLOC_DIR})
 add_subdirectory(${OVERLAPTRIMMER_DIR})
 add_subdirectory(${REGPIPELINE_DIR})
+add_subdirectory(${DATAIO_DIR})
 add_subdirectory(${REGEXAMPLE_DIR})

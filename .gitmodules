@@ -1,3 +1,6 @@
 [submodule "External/flann"]
 	path = External/flann
 	url = https://github.com/mariusmuja/flann.git
+[submodule "External/librply"]
+	path = External/librply
+	url = https://github.com/lkiesow/librply.git
