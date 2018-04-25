@@ -91,6 +91,8 @@ SSICP_PUBLIC void SSICP::Initialize()
 
   // intial values for T
   T = y_c - x_c;
+
+  OutputParameters();
 }
 
 SSICP_PUBLIC void SSICP::Iterate()
@@ -102,6 +104,7 @@ SSICP_PUBLIC void SSICP::Iterate()
       printf("Iteration #%zu: %lf\n", counter, last_e);
     FindCorrespondeces();
     FindTransformation();
+    OutputParameters();
   } while (!Converged());
 }
 
@@ -193,6 +196,15 @@ SSICP_PUBLIC bool SSICP::Converged()
   bool conv = (theta < epsilon);
   last_e = e;
   return conv;
+}
+
+SSICP_PUBLIC void SSICP::OutputParameters()
+{
+  std::cout << "Scale: " << s << std::endl;
+  std::cout << "Rotation: " << std::endl;
+  std::cout << R << std::endl;
+  std::cout << "Translation: " << std::endl;
+  std::cout << T << std::endl;
 }
 
 SSICP_PUBLIC void SSICP::OutputTransformed(std::string out_filename)
