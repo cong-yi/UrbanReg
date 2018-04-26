@@ -25,6 +25,7 @@ namespace SSICP
   SSICP_PUBLIC void FindCorrespondeces();
   SSICP_PUBLIC void FindTransformation();
   SSICP_PUBLIC bool Converged();
+  SSICP_PUBLIC double ComputeError();
 
   SSICP_PUBLIC void OutputParameters();
   SSICP_PUBLIC void OutputTransformed(std::string out_filename);

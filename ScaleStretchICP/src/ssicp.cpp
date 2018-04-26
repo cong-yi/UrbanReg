@@ -50,6 +50,7 @@ SSICP_PUBLIC void SSICP::SetEpsilon(double e)
 
 SSICP_PUBLIC void SSICP::Initialize()
 {
+  Z = Eigen::MatrixXd::Zero(X.rows(), X.cols());
   last_e = std::numeric_limits<double>::max();
 
   // calculate initial values for s(a, b)
@@ -100,12 +101,13 @@ SSICP_PUBLIC void SSICP::Iterate()
   size_t counter = 0;
   do
   {
-    if (counter++)
-      printf("Iteration #%zu: %lf\n", counter, last_e);
+    printf("Iteration %zu:\n", ++counter);
     FindCorrespondeces();
+    std::cout << "Error after the first step: " << ComputeError() << std::endl;
     FindTransformation();
-    OutputParameters();
+    std::cout << "Error after the second step: " << ComputeError() << std::endl;
   } while (!Converged());
+  printf("Iteration #%zu: %lf\n", counter, last_e);
 }
 
 SSICP_PUBLIC void SSICP::FindCorrespondeces()
@@ -124,15 +126,15 @@ SSICP_PUBLIC void SSICP::FindCorrespondeces()
   index.buildIndex();
 
   // build the queries
-  Eigen::MatrixXd RTX = s * X * R.transpose();
-  RTX.rowwise() += T;
+  Eigen::MatrixXd SRXT = s * X * R.transpose();
+  SRXT.rowwise() += T;
 
   size_t rows_queries = X.rows();
   double *queries = static_cast<double *>(malloc(rows_queries * cols * sizeof(double)));
   ptr = queries;
   for (size_t i = 0; i < rows_queries; ++i)
     for (size_t j = 0; j < cols; ++j)
-      *(ptr++) = RTX(i, j);
+      *(ptr++) = SRXT(i, j);
   flann::Matrix<double> mat_queries(queries, rows_queries, cols);
 
   // find the nearest points
@@ -181,26 +183,23 @@ SSICP_PUBLIC void SSICP::FindTransformation()
 
 SSICP_PUBLIC bool SSICP::Converged()
 {
-  double e = 0;
-  size_t rows = X.rows(), cols = X.cols();
-  Eigen::RowVector3d x_c = X.colwise().sum() / static_cast<double>(rows);
-  Eigen::RowVector3d z_c = Z.colwise().sum() / static_cast<double>(rows);
-  Eigen::MatrixXd X_tilde(X), Z_tilde(Z);
-  X_tilde.rowwise() -= x_c, Z_tilde.rowwise() -= z_c;
-
-  e += s * s * X_tilde.cwiseProduct(X_tilde).sum();
-  e -= 2 * s * Z_tilde.cwiseProduct(X_tilde * (R.transpose())).sum();
-  e += Z_tilde.cwiseProduct(Z_tilde).sum();
-
+  double e = ComputeError();
   double theta = last_e > 0 ? 1 - e / last_e : 0;
-  bool conv = (theta < epsilon);
+  bool conv = (theta >= 0 && theta < epsilon);
   last_e = e;
   return conv;
 }
 
+SSICP_PUBLIC double SSICP::ComputeError()
+{
+  Eigen::MatrixXd E = s * X * R.transpose() + T - Z;
+  double e = E.cwiseProduct(E).sum();
+  return e;
+}
+
 SSICP_PUBLIC void SSICP::OutputParameters()
 {
-  std::cout << "Scale: " << s << std::endl;
+  std::cout << "Scale: " << s << " in [" << a << ", " << b << "]" << std::endl;
   std::cout << "Rotation: " << std::endl;
   std::cout << R << std::endl;
   std::cout << "Translation: " << std::endl;
