@@ -10,3 +10,6 @@
 [submodule "External/glad"]
 	path = External/glad
 	url = https://github.com/Dav1dde/glad.git
+[submodule "External/kdtree"]
+	path = External/kdtree
+	url = https://github.com/jtsiomb/kdtree.git

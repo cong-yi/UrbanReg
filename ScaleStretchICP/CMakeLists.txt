@@ -14,6 +14,7 @@ set(SSICP_SRC_FILES
 	)
 
 include_directories("${SSICP_DIR}/include")
+include_directories("${KDTREE_DIR}")
 add_library(SSICP SHARED ${SSICP_INC_FILES} ${SSICP_SRC_FILES})
-target_link_libraries(SSICP ${FLANN_LIBRARIES})
+target_link_libraries(SSICP ${FLANN_LIBRARIES} kdtree)
 add_definitions(-DSSICP_EXPORT)
