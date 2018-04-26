@@ -4,3 +4,9 @@
 [submodule "External/librply"]
 	path = External/librply
 	url = https://github.com/lkiesow/librply.git
+[submodule "External/glfw"]
+	path = External/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "External/glad"]
+	path = External/glad
+	url = https://github.com/Dav1dde/glad.git
