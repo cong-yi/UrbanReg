@@ -5,7 +5,7 @@
 #include <climits>
 
 #include <Eigen/dense>
-#include <flann/flann.hpp>
+#include "kdtree.h"
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
 
@@ -112,39 +112,28 @@ SSICP_PUBLIC void SSICP::Iterate()
 
 SSICP_PUBLIC void SSICP::FindCorrespondeces()
 {
-  // use flann to calculate nesrest points
-  // build the data for searching
-  size_t rows_data = Y.rows(), cols = Y.cols();
-  double *data = static_cast<double *>(malloc(rows_data * cols * sizeof(double)));
-  double *ptr = data;
-  for (size_t i = 0; i < rows_data; ++i)
-    for (size_t j = 0; j < cols; ++j)
-      *(ptr++) = Y(i, j);
-
-  flann::Matrix<double> mat_data(data, rows_data, cols);
-  flann::Index<flann::L2<double>> index(mat_data, flann::KDTreeIndexParams(4));
-  index.buildIndex();
-
-  // build the queries
+  // use kdtree to calculate nesrest points
+  kdtree *ptree = kd_create(3);
+  char *data = new char('a');
+  for (int i = 0; i < Y.rows(); ++i)
+    kd_insert3(ptree, Y(i, 0), Y(i, 1), Y(i, 2), data);
   Eigen::MatrixXd SRXT = s * X * R.transpose();
   SRXT.rowwise() += T;
-
-  size_t rows_queries = X.rows();
-  double *queries = static_cast<double *>(malloc(rows_queries * cols * sizeof(double)));
-  ptr = queries;
-  for (size_t i = 0; i < rows_queries; ++i)
-    for (size_t j = 0; j < cols; ++j)
-      *(ptr++) = SRXT(i, j);
-  flann::Matrix<double> mat_queries(queries, rows_queries, cols);
-
-  // find the nearest points
-  std::vector<std::vector<int>> indices;
-  std::vector<std::vector<double>> dists;
-  index.knnSearch(mat_queries, indices, dists, 1, flann::SearchParams(128));
-
-  Z = Eigen::MatrixXd(rows_queries, cols);
-  for (size_t i = 0; i < rows_queries; ++i)
-    Z.row(i) = Y.row(indices[i].front());
+  for (int i = 0; i < X.rows(); ++i)
+  {
+    kdres *presults = kd_nearest3(ptree, SRXT(i, 0), SRXT(i, 1), SRXT(i, 2));
+    while (!kd_res_end(presults))
+    {
+      double pos[3];
+      kd_res_item(presults, pos);
+      for (int j = 0; j < 3; ++j)
+        Z(i, j) = pos[j];
+      kd_res_next(presults);
+    }
+    kd_res_free(presults);
+  }
+  free(data);
+  kd_free(ptree);
 }
 
 SSICP_PUBLIC void SSICP::FindTransformation()
@@ -192,7 +181,8 @@ SSICP_PUBLIC bool SSICP::Converged()
 
 SSICP_PUBLIC double SSICP::ComputeError()
 {
-  Eigen::MatrixXd E = s * X * R.transpose() + T - Z;
+  Eigen::MatrixXd E = s * X * R.transpose() - Z;
+  E.rowwise() += T;
   double e = E.cwiseProduct(E).sum();
   return e;
 }
