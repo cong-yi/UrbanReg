@@ -13,3 +13,6 @@
 [submodule "External/kdtree"]
 	path = External/kdtree
 	url = https://github.com/jtsiomb/kdtree.git
+[submodule "External/jsoncpp"]
+	path = External/jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp.git

@@ -3,6 +3,7 @@
 #include "rply.h"
 #include <iostream>
 #include "../../ScaleStretchICP/include/ssicp.h"
+#include <json/json.h>
 
 int DataIO::read_ply(const std::string& filename, Eigen::MatrixXd& v, Eigen::MatrixXd& vc)
 {
