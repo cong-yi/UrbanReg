@@ -1,8 +1,10 @@
 #include "data_io.h"
-#include <vector>
-#include "rply.h"
+
 #include <iostream>
-#include "../../ScaleStretchICP/include/ssicp.h"
+#include <fstream>
+#include <vector>
+
+#include "rply.h"
 #include <json/json.h>
 
 int DataIO::read_ply(const std::string& filename, Eigen::MatrixXd& v, Eigen::MatrixXd& vc)
@@ -140,4 +142,19 @@ int DataIO::write_ply(const std::string& filename, const Eigen::MatrixXd& v, con
 	}
 
 	return EXIT_SUCCESS;
+}
+
+DATAIO_PUBLIC int DataIO::load_gps(const std::string &filename, Eigen::MatrixXd &local)
+{
+  std::ifstream ifs(filename);
+  if (!ifs.good()) return EXIT_FAILURE;
+
+  Json::CharReaderBuilder reader;
+  Json::Value sfm_data;
+  std::string errs;
+  Json::parseFromStream(reader, ifs, &sfm_data, &errs);
+
+  
+
+  return EXIT_SUCCESS;
 }
