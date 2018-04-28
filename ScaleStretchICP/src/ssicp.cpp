@@ -190,7 +190,7 @@ SSICP_PUBLIC void SSICP::OutputParameters(const double &s, const double &a, cons
   std::cout << T << std::endl;
 }
 
-SSICP_PUBLIC Eigen::MatrixXd SSICP::GetTransformed(const Eigen::MatrixXd &X, double &s, const Eigen::MatrixX3d &R,
+SSICP_PUBLIC Eigen::MatrixXd SSICP::GetTransformed(const Eigen::MatrixXd &X, const double &s, const Eigen::MatrixX3d &R,
   const Eigen::RowVector3d &T)
 {
   Eigen::MatrixXd A = s * X * R.transpose();

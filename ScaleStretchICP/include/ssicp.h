@@ -28,7 +28,7 @@ namespace SSICP
   SSICP_PUBLIC void OutputParameters(const double &s, const double &a, const double &b, const Eigen::MatrixXd &R,
     const Eigen::RowVector3d T);
   // Return tranformed point cloud
-  SSICP_PUBLIC Eigen::MatrixXd GetTransformed(const Eigen::MatrixXd &X, double &s, const Eigen::MatrixX3d &R,
+  SSICP_PUBLIC Eigen::MatrixXd GetTransformed(const Eigen::MatrixXd &X, const double &s, const Eigen::MatrixX3d &R,
     const Eigen::RowVector3d &T);
 
   // The overall process of SSICP
