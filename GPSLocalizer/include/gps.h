@@ -10,7 +10,7 @@ namespace GPS
     Eigen::Matrix3d &R, Eigen::RowVector3d &T);
   GPS_PUBLIC Eigen::MatrixXd GetLocalizedPoints(const Eigen::MatrixXd &X, const double &s, const Eigen::Matrix3d &R,
     const Eigen::RowVector3d &T);
-  GPS_PUBLIC void Localize();
+  GPS_PUBLIC void Localize(Eigen::MatrixXd &A, const Eigen::MatrixXd &local, const Eigen::MatrixXd &global);
 }
 
 #endif

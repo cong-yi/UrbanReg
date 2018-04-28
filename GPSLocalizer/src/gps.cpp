@@ -17,7 +17,12 @@ GPS_PUBLIC Eigen::MatrixXd GPS::GetLocalizedPoints(const Eigen::MatrixXd &X, con
   return SSICP::GetTransformed(X, s, R, T);
 }
 
-GPS_PUBLIC void GPS::Localize()
+GPS_PUBLIC void GPS::Localize(Eigen::MatrixXd &A, const Eigen::MatrixXd &local, const Eigen::MatrixXd &global)
 {
+  double s;
+  Eigen::Matrix3d R;
+  Eigen::RowVector3d T;
+  GPS::CalcualteCamerasTransformation(local, global, s, R, T);
 
+  Eigen::MatrixXd X = GPS::GetLocalizedPoints(A, s, R, T);
 }
