@@ -49,7 +49,7 @@ SSICP_PUBLIC void SSICP::Initialize(const Eigen::MatrixXd &X, const Eigen::Matri
   EigenvaluesAndEigenvectors(M_X, evax, evex);
   EigenvaluesAndEigenvectors(M_Y, evay, evey);
 
-  a = std::numeric_limits<double>::max(), b = std::numeric_limits<double>::min(), s = 0;
+  a = std::numeric_limits<double>::max(), b = std::numeric_limits<double>::lowest(), s = 0;
   for (size_t i = 0; i < 3; ++i)
   {
     double v = sqrt(evay[i] / evax[i]);
@@ -107,7 +107,7 @@ SSICP_PUBLIC void SSICP::Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd
 SSICP_PUBLIC Eigen::MatrixXd SSICP::FindCorrespondeces(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &s,
   const Eigen::Matrix3d &R, const Eigen::RowVector3d &T)
 {
-  // use kdtree to calculate nesrest points
+  // use kdtree to calculate nearest points
   kdtree *ptree = kd_create(3);
   char *data = new char('a');
   for (int i = 0; i < Y.rows(); ++i)
