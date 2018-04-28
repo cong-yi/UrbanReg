@@ -33,27 +33,10 @@ void EigenvaluesAndEigenvectors(const Eigen::Matrix3d &A, std::vector<double> &e
       }
 }
 
-SSICP_PUBLIC void SSICP::SetX(const Eigen::MatrixXd &_)
+SSICP_PUBLIC void SSICP::Initialize(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y,
+  double &s, double &a, double &b, Eigen::Matrix3d &R, Eigen::RowVector3d &T)
 {
-  X = _;
-}
-
-SSICP_PUBLIC void SSICP::SetY(const Eigen::MatrixXd & _)
-{
-  Y = _;
-}
-
-SSICP_PUBLIC void SSICP::SetEpsilon(double e)
-{
-  epsilon = e;
-}
-
-SSICP_PUBLIC void SSICP::Initialize()
-{
-  Z = Eigen::MatrixXd::Zero(X.rows(), X.cols());
-  last_e = std::numeric_limits<double>::max();
-
-  // calculate initial values for s(a, b)
+  // calculate initial values for s, a and b
   Eigen::RowVector3d x_c = X.colwise().sum() / static_cast<double>(X.rows());
   Eigen::RowVector3d y_c = Y.colwise().sum() / static_cast<double>(Y.rows());
   Eigen::MatrixXd X_tilde(X), Y_tilde(Y);
@@ -66,7 +49,7 @@ SSICP_PUBLIC void SSICP::Initialize()
   EigenvaluesAndEigenvectors(M_X, evax, evex);
   EigenvaluesAndEigenvectors(M_Y, evay, evey);
 
-  a = std::numeric_limits<double>::max(), b = std::numeric_limits<double>::min();
+  a = std::numeric_limits<double>::max(), b = std::numeric_limits<double>::min(), s = 0;
   for (size_t i = 0; i < 3; ++i)
   {
     double v = sqrt(evay[i] / evax[i]);
@@ -92,33 +75,48 @@ SSICP_PUBLIC void SSICP::Initialize()
 
   // intial values for T
   T = y_c - x_c;
-
-  OutputParameters();
 }
 
-SSICP_PUBLIC void SSICP::Iterate()
+SSICP_PUBLIC void SSICP::Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &a, const double &b,
+  const double &epsilon, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T)
 {
   size_t counter = 0;
-  do
+  double last_error = std::numeric_limits<double>::max();
+  for (;;)
   {
-    printf("Iteration %zu:\n", ++counter);
-    FindCorrespondeces();
-    std::cout << "Error after the first step: " << ComputeError() << std::endl;
-    FindTransformation();
-    std::cout << "Error after the second step: " << ComputeError() << std::endl;
-  } while (!Converged());
-  printf("Iteration #%zu: %lf\n", counter, last_e);
+    ++counter;
+    printf("Iteration %zu:\n", counter);
+
+    Eigen::MatrixXd Z = FindCorrespondeces(X, Y, s, R, T);
+    double error = ComputeError(X, Z, s, R, T);
+    printf("Error after the first step: %lf\n", error);
+    FindTransformation(X, Z, a, b, s, R, T);
+    error = ComputeError(X, Z, s, R, T);
+    printf("Error after the second step: %lf\n", error);
+    
+    if (counter > 1)
+    {
+      double theta = 1 - error / last_error;
+      if (theta < epsilon) break;
+    }
+    last_error = error;
+  }
+  printf("Alignment Finished!\n");
 }
 
-SSICP_PUBLIC void SSICP::FindCorrespondeces()
+SSICP_PUBLIC Eigen::MatrixXd SSICP::FindCorrespondeces(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &s,
+  const Eigen::Matrix3d &R, const Eigen::RowVector3d &T)
 {
   // use kdtree to calculate nesrest points
   kdtree *ptree = kd_create(3);
   char *data = new char('a');
   for (int i = 0; i < Y.rows(); ++i)
     kd_insert3(ptree, Y(i, 0), Y(i, 1), Y(i, 2), data);
+
   Eigen::MatrixXd SRXT = s * X * R.transpose();
   SRXT.rowwise() += T;
+
+  Eigen::MatrixXd Z(X.rows(), X.cols());
   for (int i = 0; i < X.rows(); ++i)
   {
     kdres *presults = kd_nearest3(ptree, SRXT(i, 0), SRXT(i, 1), SRXT(i, 2));
@@ -134,9 +132,12 @@ SSICP_PUBLIC void SSICP::FindCorrespondeces()
   }
   free(data);
   kd_free(ptree);
+
+  return Z;
 }
 
-SSICP_PUBLIC void SSICP::FindTransformation()
+SSICP_PUBLIC void SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &a,
+  const double &b, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T)
 {
   // calculate X_tilde and Z_tilde
   size_t rows = X.rows(), cols = X.cols();
@@ -170,16 +171,8 @@ SSICP_PUBLIC void SSICP::FindTransformation()
   T = z_c - s * x_c * (R.transpose());
 }
 
-SSICP_PUBLIC bool SSICP::Converged()
-{
-  double e = ComputeError();
-  double theta = last_e > 0 ? 1 - e / last_e : 0;
-  bool conv = (theta >= 0 && theta < epsilon);
-  last_e = e;
-  return conv;
-}
-
-SSICP_PUBLIC double SSICP::ComputeError()
+SSICP_PUBLIC double SSICP::ComputeError(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &s,
+  const Eigen::Matrix3d &R, const Eigen::RowVector3d &T)
 {
   Eigen::MatrixXd E = s * X * R.transpose() - Z;
   E.rowwise() += T;
@@ -187,7 +180,8 @@ SSICP_PUBLIC double SSICP::ComputeError()
   return e;
 }
 
-SSICP_PUBLIC void SSICP::OutputParameters()
+SSICP_PUBLIC void SSICP::OutputParameters(const double &s, const double &a, const double &b, const Eigen::MatrixXd &R,
+  const Eigen::RowVector3d T)
 {
   std::cout << "Scale: " << s << " in [" << a << ", " << b << "]" << std::endl;
   std::cout << "Rotation: " << std::endl;
@@ -196,22 +190,23 @@ SSICP_PUBLIC void SSICP::OutputParameters()
   std::cout << T << std::endl;
 }
 
-SSICP_PUBLIC void SSICP::OutputTransformed(std::string out_filename)
+SSICP_PUBLIC Eigen::MatrixXd SSICP::GetTransformed(const Eigen::MatrixXd &X, double &s, const Eigen::MatrixX3d &R,
+  const Eigen::RowVector3d &T)
 {
   Eigen::MatrixXd A = s * X * R.transpose();
   A.rowwise() += T;
-  igl::writeOBJ(out_filename, A, Eigen::MatrixXi());
+  return A;
 }
 
-SSICP_PUBLIC void SSICP::Test(const std::string &filename_x, const std::string &filename_y,
-  const std::string &out_filename)
+SSICP_PUBLIC Eigen::MatrixXd SSICP::Align(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y)
 {
-  Eigen::MatrixXi F;
-  igl::readOBJ(filename_x, X, F);
-  igl::readOBJ(filename_y, Y, F);
-  SetEpsilon(0.0001);
-
-  Initialize();
-  Iterate();
-  OutputTransformed(out_filename);
+  double s, a, b, epsilon = 0.001;
+  Eigen::Matrix3d R;
+  Eigen::RowVector3d T;
+  Initialize(X, Y, s, a, b, R, T);
+#ifndef NDEBUG
+  OutputParameters(s, a, b, R, T);
+#endif // NDEBUG
+  Iterate(X, Y, a, b, epsilon, s, R, T);
+  return GetTransformed(X, s, R, T);
 }

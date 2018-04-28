@@ -7,31 +7,32 @@
 
 namespace SSICP
 {
-  // variables
-  Eigen::MatrixXd X, Y;
-  
-  Eigen::MatrixXd R, Z;
-  Eigen::RowVector3d T;
-  double s, a, b, last_e, epsilon;
-   
-  // methods
-  SSICP_PUBLIC void SetX(const Eigen::MatrixXd &_);
-  SSICP_PUBLIC void SetY(const Eigen::MatrixXd &_);
-  SSICP_PUBLIC void SetEpsilon(double e);
+  // Initialize parameters
+  SSICP_PUBLIC void Initialize(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y,
+    double &s, double &a, double &b, Eigen::Matrix3d &R, Eigen::RowVector3d &T);
 
-  SSICP_PUBLIC void Initialize();
+  // The iterative algorithm
+  SSICP_PUBLIC void Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &a, const double &b,
+    const double &epsilon, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T);
+  // Perform the first step of iteration
+  SSICP_PUBLIC Eigen::MatrixXd FindCorrespondeces(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &s,
+    const Eigen::Matrix3d &R, const Eigen::RowVector3d &T);
+  // Perform the second step of iteration
+  SSICP_PUBLIC void FindTransformation(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &a,
+    const double &b, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T);
+  // Compute error for current parameters
+  SSICP_PUBLIC double ComputeError(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &s,
+    const Eigen::Matrix3d &R, const Eigen::RowVector3d &T);
 
-  SSICP_PUBLIC void Iterate();
-  SSICP_PUBLIC void FindCorrespondeces();
-  SSICP_PUBLIC void FindTransformation();
-  SSICP_PUBLIC bool Converged();
-  SSICP_PUBLIC double ComputeError();
+  // Output current parameters
+  SSICP_PUBLIC void OutputParameters(const double &s, const double &a, const double &b, const Eigen::MatrixXd &R,
+    const Eigen::RowVector3d T);
+  // Return tranformed point cloud
+  SSICP_PUBLIC Eigen::MatrixXd GetTransformed(const Eigen::MatrixXd &X, double &s, const Eigen::MatrixX3d &R,
+    const Eigen::RowVector3d &T);
 
-  SSICP_PUBLIC void OutputParameters();
-  SSICP_PUBLIC void OutputTransformed(std::string out_filename);
-
-  SSICP_PUBLIC void Test(const std::string &filename_x, const std::string &filename_y,
-    const std::string &out_filename);
+  // The overall process of SSICP
+  SSICP_PUBLIC Eigen::MatrixXd Align(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y);
 }
 
 #endif
