@@ -4,7 +4,6 @@
 
 #include <Eigen/dense>
 
-
 namespace Trimmer
 {
   struct BoundingBox
@@ -24,10 +23,11 @@ namespace Trimmer
   // return points near to a another point cloud
   OVERLAPTRIMMER_PUBLIC Eigen::MatrixXd GetNearbyPoints(const Eigen::MatrixXd &P, const Eigen::MatrixXd &T,
     double threshold);
+  // abandon points far away from the other point cloud
   OVERLAPTRIMMER_PUBLIC void TrimThroughDistances(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold,
     bool percentage);
 
-  OVERLAPTRIMMER_PUBLIC void Test(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold);
+  OVERLAPTRIMMER_PUBLIC void Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold);
 }
 
 #endif

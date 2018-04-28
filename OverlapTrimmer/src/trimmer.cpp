@@ -4,13 +4,13 @@
 #include <algorithm>
 #include <vector>
 
-#include <flann/flann.hpp>
+#include <kdtree.h>
 
 Trimmer::BoundingBox::BoundingBox(const Eigen::MatrixXd &P)
 {
   min_point(0) = std::numeric_limits<double>::max();
   min_point(1) = min_point(0), min_point(2) = min_point(0);
-  max_point(0) = std::numeric_limits<double>::min();
+  max_point(0) = std::numeric_limits<double>::lowest();
   max_point(1) = max_point(0), max_point(2) = max_point(0);
   for (int i = 0; i < P.rows(); ++i)
   {
@@ -64,37 +64,42 @@ OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughBoudingBox(Eigen::MatrixXd &A, Ei
 OVERLAPTRIMMER_PUBLIC Eigen::MatrixXd Trimmer::GetNearbyPoints(const Eigen::MatrixXd &P, const Eigen::MatrixXd &T,
   double threshold)
 {
-  int rt = T.rows(), c = T.cols();
-  double *data = static_cast<double *>(malloc(1LL * rt * c * sizeof(double)));
-  double *ptr = data;
-  for (int i = 0; i < rt; ++i)
-    for (int j = 0; j < c; ++j)
-      *(ptr++) = T(i, j);
-  flann::Matrix<double> data_mat(data, rt, c);
-  flann::Index<flann::L2<double>> index(data_mat, flann::KDTreeIndexParams(4));
-  index.buildIndex();
+  kdtree *ptree = kd_create(3);
+  char *data = new char('a');
+  for (int i = 0; i < T.rows(); ++i)
+    kd_insert3(ptree, T(i, 0), T(i, 1), T(i, 2), data);
 
-  int rp = P.rows();
-  double *queries = static_cast<double *>(malloc(1LL * rp * c * sizeof(double)));
-  ptr = queries;
-  for (int i = 0; i < rp; ++i)
-    for (int j = 0; j < c; ++j)
-      *(ptr++) = P(i, j);
-  flann::Matrix<double> queries_mat(queries, rp, c);
+  std::vector<Eigen::RowVector3d> points;
+  for (int i = 0; i < P.rows(); ++i)
+  {
+    Eigen::RowVector3d Pi;
+    double dist = std::numeric_limits<double>::max();
+    kdres *presults = kd_nearest3(ptree, P(i, 0), P(i, 1), P(i, 2));
+    while (!kd_res_end(presults))
+    {
+      double pos[3];
+      kd_res_item(presults, pos);
+      
+      Eigen::RowVector3d R;
+      for (int j = 0; j < 3; ++j)
+      {
+        R(j) = pos[j];
+        Pi(j) = P(i, j);
+      }
+      dist = std::min(dist, (R - Pi).norm());
 
-  std::vector<std::vector<int>> indices;
-  std::vector<std::vector<double>> dists;
-  index.radiusSearch(queries_mat, indices, dists, threshold * threshold, flann::SearchParams(128));
+      kd_res_next(presults);
+    }
+    kd_res_free(presults);
 
-  int counter = 0;
-  for (size_t i = 0; i < indices.size(); ++i)
-    counter += (!indices[i].empty());
-  int it = 0;
-  Eigen::MatrixXd A(counter, c);
-  for (size_t i = 0; i < indices.size(); ++i)
-    if (!indices[i].empty())
-      A.row(it++) = P.row(i);
-  return A;
+    if (dist < threshold)
+      points.push_back(Pi);
+  }
+
+  Eigen::MatrixXd res(points.size(), 3);
+  for (int i = 0; i < res.rows(); ++i)
+    res.row(i) = points[i];
+  return res;
 }
 
 OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughDistances(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold,
@@ -109,7 +114,7 @@ OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughDistances(Eigen::MatrixXd &A, Eig
   A = AA, B = BB;
 }
 
-OVERLAPTRIMMER_PUBLIC void Trimmer::Test(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold)
+OVERLAPTRIMMER_PUBLIC void Trimmer::Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold)
 {
   TrimThroughBoudingBox(A, B);
   TrimThroughDistances(A, B, threshold, true);
