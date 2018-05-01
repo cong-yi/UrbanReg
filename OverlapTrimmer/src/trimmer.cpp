@@ -117,5 +117,5 @@ OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughDistances(Eigen::MatrixXd &A, Eig
 OVERLAPTRIMMER_PUBLIC void Trimmer::Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold)
 {
   TrimThroughBoudingBox(A, B);
-  TrimThroughDistances(A, B, threshold, true);
+  // TrimThroughDistances(A, B, threshold, true);
 }
