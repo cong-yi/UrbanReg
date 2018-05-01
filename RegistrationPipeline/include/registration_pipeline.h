@@ -19,7 +19,7 @@ namespace RegPipeline
   // filenames[1]: input filename of point cloud b
   // filenames[2]: output filename of point cloud a
   // filenames[3]: output filename of point cloud b
-  REGPIPELINE_PUBLIC void TrimPointsClouds(const std::vector<std::string> &filenames, std::string &in_format);
+  REGPIPELINE_PUBLIC void TrimPointsClouds(const std::vector<std::string> &filenames, std::string &format);
 }
 
 #endif
