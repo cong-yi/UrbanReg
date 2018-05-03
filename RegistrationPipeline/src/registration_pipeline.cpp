@@ -18,8 +18,8 @@ REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::s
   }
   if (format == "PLY" || format == "ply")
   {
-    Eigen::MatrixXd C;
-    DataIO::read_ply(filenames[0], A, C);
+    Eigen::MatrixXd C, N;
+    DataIO::read_ply(filenames[0], A, C, N);
   }
 
   Eigen::MatrixXd L, G;
@@ -36,7 +36,7 @@ REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::s
   if (format == "OBJ" || format == "obj")
     igl::writeOBJ(filenames[3], B, Eigen::MatrixXi());
   if (format == "PLY" || format == "ply")
-    DataIO::write_ply(filenames[3], B, Eigen::MatrixXd());
+    DataIO::write_ply(filenames[3], B, Eigen::MatrixXd(), Eigen::MatrixXd());
 }
 
 REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::string> &filenames,
@@ -53,9 +53,9 @@ REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::str
   }
   if (format == "PLY" || format == "ply")
   {
-    Eigen::MatrixXd C;
-    DataIO::read_ply(filenames[0], A, C);
-    DataIO::read_ply(filenames[1], B, C);
+    Eigen::MatrixXd C, N;
+    DataIO::read_ply(filenames[0], A, C, N);
+    DataIO::read_ply(filenames[1], B, C, N);
   }
 
   Trimmer::Trim(A, B, 0.05);
@@ -67,7 +67,7 @@ REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::str
   }
   if (format == "PLY" || format == "ply")
   {
-    DataIO::write_ply(filenames[2], A, Eigen::MatrixXd());
-    DataIO::write_ply(filenames[3], B, Eigen::MatrixXd());
+    DataIO::write_ply(filenames[2], A, Eigen::MatrixXd(), Eigen::MatrixXd());
+    DataIO::write_ply(filenames[3], B, Eigen::MatrixXd(), Eigen::MatrixXd());
   }
 }
