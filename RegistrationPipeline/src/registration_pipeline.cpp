@@ -45,7 +45,7 @@ REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::str
 {
   if (filenames.size() < 4) return;
 
-  Eigen::MatrixXd A, B;
+  Eigen::MatrixXd A, B, CA, CB, NA, NB;
   if (format == "OBJ" || format == "obj")
   {
     Eigen::MatrixXi F;
@@ -54,12 +54,33 @@ REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::str
   }
   if (format == "PLY" || format == "ply")
   {
-    Eigen::MatrixXd C, N;
-    DataIO::read_ply(filenames[0], A, C, N);
-    DataIO::read_ply(filenames[1], B, C, N);
+    DataIO::read_ply(filenames[0], A, CA, NA);
+    DataIO::read_ply(filenames[1], B, CB, NB);
   }
 
-  Trimmer::Trim(A, B, 0.05);
+  std::vector<int> indices_a(A.rows()), indices_b(B.rows());
+  for (size_t i = 0; i < indices_a.size(); ++i)
+    indices_a[i] = i;
+  for (size_t i = 0; i < indices_b.size(); ++i)
+    indices_b[i] = i;
+
+  Trimmer::Trim(A, B, 0.05, indices_a, indices_b);
+
+  Eigen::MatrixXd AA(indices_a.size(), 3), BB(indices_b.size(), 3);
+  Eigen::MatrixXd CAA(indices_a.size(), 3), CBB(indices_b.size(), 3);
+  Eigen::MatrixXd NAA(indices_a.size(), 3), NBB(indices_b.size(), 3);
+  for (int i = 0; i < indices_a.size(); ++i)
+  {
+    AA.row(i) = A.row(indices_a[i]);
+    CAA.row(i) = CA.row(indices_a[i]);
+    NAA.row(i) = NA.row(indices_a[i]);
+  }
+  for (int i = 0; i < indices_b.size(); ++i)
+  {
+    BB.row(i) = B.row(indices_b[i]);
+    CBB.row(i) = CB.row(indices_b[i]);
+    NBB.row(i) = NB.row(indices_b[i]);
+  }
 
   if (format == "OBJ" || format == "obj")
   {
@@ -68,7 +89,7 @@ REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::str
   }
   if (format == "PLY" || format == "ply")
   {
-    DataIO::write_ply(filenames[2], A, Eigen::MatrixXd(), Eigen::MatrixXd());
-    DataIO::write_ply(filenames[3], B, Eigen::MatrixXd(), Eigen::MatrixXd());
+    DataIO::write_ply(filenames[2], AA, CAA, NAA);
+    DataIO::write_ply(filenames[3], BB, CBB, NBB);
   }
 }

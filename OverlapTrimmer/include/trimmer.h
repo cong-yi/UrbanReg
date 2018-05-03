@@ -2,6 +2,7 @@
 #define TRIMMER_H
 #include "prereq.h"
 
+#include <vector>
 #include <Eigen/dense>
 
 namespace Trimmer
@@ -19,15 +20,17 @@ namespace Trimmer
   OVERLAPTRIMMER_PUBLIC BoundingBox Union(const BoundingBox &a, const BoundingBox &b);
 
   // keep points in the union of bounding boxes of two point clouds
-  OVERLAPTRIMMER_PUBLIC void TrimThroughBoudingBox(Eigen::MatrixXd &A, Eigen::MatrixXd &B);
+  OVERLAPTRIMMER_PUBLIC void TrimThroughBoundingBox(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B,
+    std::vector<int> &indices_a, std::vector<int> &indices_b);
   // return points near to a another point cloud
-  OVERLAPTRIMMER_PUBLIC Eigen::MatrixXd GetNearbyPoints(const Eigen::MatrixXd &P, const Eigen::MatrixXd &T,
-    double threshold);
+  OVERLAPTRIMMER_PUBLIC void GetNearbyPoints(const Eigen::MatrixXd &P, const Eigen::MatrixXd &T,
+    const double threshold, std::vector<int> &indices_p);
   // abandon points far away from the other point cloud
-  OVERLAPTRIMMER_PUBLIC void TrimThroughDistances(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold,
-    bool percentage);
+  OVERLAPTRIMMER_PUBLIC void TrimThroughDistances(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B, double threshold,
+    bool percentage, std::vector<int> &indices_a, std::vector<int> &indices_b);
 
-  OVERLAPTRIMMER_PUBLIC void Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold);
+  OVERLAPTRIMMER_PUBLIC void Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold,
+    std::vector<int> &indices_a, std::vector<int> &indices_b);
 }
 
 #endif

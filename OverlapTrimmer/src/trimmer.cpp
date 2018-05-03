@@ -41,40 +41,36 @@ OVERLAPTRIMMER_PUBLIC Trimmer::BoundingBox Trimmer::Union(const BoundingBox &a, 
   return bb;
 }
 
-OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughBoudingBox(Eigen::MatrixXd &A, Eigen::MatrixXd &B)
+OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughBoundingBox(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B,
+  std::vector<int> &indices_a, std::vector<int> &indices_b)
 {
   BoundingBox bb = Union(BoundingBox(A), BoundingBox(B));
-  size_t ca = 0, cb = 0;
-  for (int i = 0; i < A.rows(); ++i)
-    ca += bb.Contains(A.row(i));
-  for (int i = 0; i < B.rows(); ++i)
-    cb += bb.Contains(B.row(i));
+  
+  std::vector<int> ka, kb;
+  for (size_t i = 0; i < indices_a.size(); ++i)
+    if (bb.Contains(A.row(indices_a[i])))
+      ka.push_back(indices_a[i]);
+  for (size_t i = 0; i < indices_b.size(); ++i)
+    if (bb.Contains(B.row(indices_b[i])))
+      kb.push_back(indices_b[i]);
 
-  Eigen::MatrixXd AA(ca, 3), BB(cb, 3);
-  ca = cb = 0;
-  for (int i = 0; i < A.rows(); ++i)
-    if (bb.Contains(A.row(i)))
-      AA.row(ca++) = A.row(i);
-  for (int i = 0; i < B.rows(); ++i)
-    if (bb.Contains(B.row(i)))
-      BB.row(cb++) = B.row(i);
-  A = AA, B = BB;
+  indices_a = ka, indices_b = kb;
 }
 
-OVERLAPTRIMMER_PUBLIC Eigen::MatrixXd Trimmer::GetNearbyPoints(const Eigen::MatrixXd &P, const Eigen::MatrixXd &T,
-  double threshold)
+OVERLAPTRIMMER_PUBLIC void Trimmer::GetNearbyPoints(const Eigen::MatrixXd &P, const Eigen::MatrixXd &T,
+  double threshold, std::vector<int> &indices_p)
 {
   kdtree *ptree = kd_create(3);
   char *data = new char('a');
   for (int i = 0; i < T.rows(); ++i)
     kd_insert3(ptree, T(i, 0), T(i, 1), T(i, 2), data);
 
-  std::vector<Eigen::RowVector3d> points;
-  for (int i = 0; i < P.rows(); ++i)
+  std::vector<int> kp;
+  for (int i = 0; i < indices_p.size(); ++i)
   {
     Eigen::RowVector3d Pi;
     double dist = std::numeric_limits<double>::max();
-    kdres *presults = kd_nearest3(ptree, P(i, 0), P(i, 1), P(i, 2));
+    kdres *presults = kd_nearest3(ptree, P(indices_p[i], 0), P(indices_p[i], 1), P(indices_p[i], 2));
     while (!kd_res_end(presults))
     {
       double pos[3];
@@ -84,7 +80,7 @@ OVERLAPTRIMMER_PUBLIC Eigen::MatrixXd Trimmer::GetNearbyPoints(const Eigen::Matr
       for (int j = 0; j < 3; ++j)
       {
         R(j) = pos[j];
-        Pi(j) = P(i, j);
+        Pi(j) = P(indices_p[i], j);
       }
       dist = std::min(dist, (R - Pi).norm());
 
@@ -93,29 +89,26 @@ OVERLAPTRIMMER_PUBLIC Eigen::MatrixXd Trimmer::GetNearbyPoints(const Eigen::Matr
     kd_res_free(presults);
 
     if (dist < threshold)
-      points.push_back(Pi);
+      kp.push_back(indices_p[i]);
   }
-
-  Eigen::MatrixXd res(points.size(), 3);
-  for (int i = 0; i < res.rows(); ++i)
-    res.row(i) = points[i];
-  return res;
+  indices_p = kp;
 }
 
-OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughDistances(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold,
-  bool percentage)
+OVERLAPTRIMMER_PUBLIC void Trimmer::TrimThroughDistances(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B,
+  double threshold, bool percentage, std::vector<int> &indices_a, std::vector<int> &indices_b)
 {
   if (percentage)
   {
     BoundingBox bb = Union(BoundingBox(A), BoundingBox(B));
     threshold = threshold * (bb.max_point - bb.min_point).norm();
   }
-  Eigen::MatrixXd AA = GetNearbyPoints(A, B, threshold), BB = GetNearbyPoints(B, A, threshold);
-  A = AA, B = BB;
+  GetNearbyPoints(A, B, threshold, indices_a);
+  GetNearbyPoints(B, A, threshold, indices_b);
 }
 
-OVERLAPTRIMMER_PUBLIC void Trimmer::Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold)
+OVERLAPTRIMMER_PUBLIC void Trimmer::Trim(Eigen::MatrixXd &A, Eigen::MatrixXd &B, double threshold,
+  std::vector<int> &indices_a, std::vector<int> &indices_b)
 {
-  TrimThroughBoudingBox(A, B);
-  // TrimThroughDistances(A, B, threshold, true);
+  TrimThroughBoundingBox(A, B, indices_a, indices_b);
+  // TrimThroughDistances(A, B, threshold, true, indices_a, indices_b);
 }
