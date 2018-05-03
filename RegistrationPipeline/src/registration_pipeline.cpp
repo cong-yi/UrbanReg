@@ -10,7 +10,7 @@ REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::s
 {
   if (filenames.size() < 4) return;
   
-  Eigen::MatrixXd A;
+  Eigen::MatrixXd A, C, N;
   if (format == "OBJ" || format == "obj")
   {
     Eigen::MatrixXi F;
@@ -18,7 +18,6 @@ REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::s
   }
   if (format == "PLY" || format == "ply")
   {
-    Eigen::MatrixXd C, N;
     DataIO::read_ply(filenames[0], A, C, N);
   }
 
@@ -36,7 +35,9 @@ REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::s
   if (format == "OBJ" || format == "obj")
     igl::writeOBJ(filenames[3], B, Eigen::MatrixXi());
   if (format == "PLY" || format == "ply")
-    DataIO::write_ply(filenames[3], B, Eigen::MatrixXd(), Eigen::MatrixXd());
+  {
+    DataIO::write_ply(filenames[3], B, C, N);
+  }
 }
 
 REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::string> &filenames,
