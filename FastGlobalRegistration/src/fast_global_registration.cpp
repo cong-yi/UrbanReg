@@ -30,6 +30,31 @@ void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
 	index->knnSearch(query_mat, indices_mat, dists_mat, nn, flann::SearchParams(128));
 }
 
+void FastGlobalRegistration::normalize(const Eigen::VectorXd& min_corner, const Eigen::VectorXd& max_corner, Eigen::MatrixXd& v)
+{
+	assert(min_corner.size() == v.cols());
+	assert(max_corner.size() == v.cols());
+	Eigen::VectorXd min_v = v.colwise().minCoeff();
+	Eigen::VectorXd max_v = v.colwise().maxCoeff();
+	Eigen::RowVectorXd bbox_center(min_v.rows());
+	double max_range = std::numeric_limits<double>::min();
+	int m_id = -1;
+	for (int i = 0; i < v.cols(); i++)
+	{
+		double range = max_v[i] - min_v[i];
+		if (range > max_range)
+		{
+			max_range = range;
+			m_id = i;
+		}
+		bbox_center(i) = (min_v(i) + max_v(i)) * 0.5;
+	}
+	double scale_ratio = (max_corner[m_id] - min_corner[m_id]) / max_range;
+	v = (v.rowwise() - bbox_center) * scale_ratio;
+	Eigen::RowVectorXd trans = (max_corner + min_corner) * 0.5;
+	v.rowwise() += trans;
+}
+
 void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, const Eigen::MatrixXd& fpfh_1, const Eigen::MatrixXd& fpfh_2, std::vector<std::pair<int, int> >& corres)
 {
 	std::vector<const Eigen::MatrixXd *> pointcloud(2);
@@ -277,9 +302,6 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
 	double par;
 
 	par = 1.0f;
-
-	int i = 0;
-	int j = 1;
 
 	// make a float copy of v2.
 	Eigen::MatrixXf pcj_copy = v_2.cast<float>();

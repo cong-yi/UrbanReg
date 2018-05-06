@@ -16,3 +16,6 @@
 [submodule "External/jsoncpp"]
 	path = External/jsoncpp
 	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "External/gptoolbox"]
+	path = External/gptoolbox
+	url = https://github.com/alecjacobson/gptoolbox.git
