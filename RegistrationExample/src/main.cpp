@@ -43,6 +43,7 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 
 	DataIO::read_ply(pointcloud_a, v_1, vc_1, vn_1);
 	DataIO::read_ply(pointcloud_b, v_2, vc_2, vn_2);
+  v_2 *= 0.95;
 
 	Eigen::MatrixXd v(v_1.rows() + v_2.rows(), 3);
 	v.topRows(v_1.rows()) = v_1;
@@ -52,12 +53,16 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 	v_1 = v.topRows(v_1.rows());
 	v_2 = v.bottomRows(v_2.rows());
 
-	int sampling_num = 1e5;
-
-	Eigen::MatrixXd downsampled_v1 = v_1.topRows(sampling_num);
-	Eigen::MatrixXd downsampled_v2 = v_2.topRows(sampling_num);
-	Eigen::MatrixXd downsampled_vn1 = vn_1.topRows(sampling_num);
-	Eigen::MatrixXd downsampled_vn2 = vn_2.topRows(sampling_num);
+  int sampling_num = -1e5;
+  Eigen::MatrixXd downsampled_v1 = v_1, downsampled_v2 = v_2;
+  Eigen::MatrixXd downsampled_vn1 = vn_1, downsampled_vn2 = vn_2;
+  if (sampling_num > 0)
+  {
+    downsampled_v1 = downsampled_v1.topRows(sampling_num);
+    downsampled_v2 = downsampled_v2.topRows(sampling_num);
+    downsampled_vn1 = downsampled_vn1.topRows(sampling_num);
+    downsampled_vn2 = downsampled_vn2.topRows(sampling_num);
+  }
 
 	Eigen::MatrixXd feature_1, feature_2;
 
@@ -72,8 +77,12 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 	}
 	else if(feature_type == "shot" || feature_type == "SHOT")
 	{
-		Eigen::MatrixXd downsampled_vc1 = vc_1.topRows(sampling_num);
-		Eigen::MatrixXd downsampled_vc2 = vc_2.topRows(sampling_num);
+    Eigen::MatrixXd downsampled_vc1 = vc_1, downsampled_vc2 = vc_2;
+    if (sampling_num > 0)
+    {
+      downsampled_vc1 = vc_1.topRows(sampling_num);
+      downsampled_vc2 = vc_2.topRows(sampling_num);
+    }
 		//igl::readDMAT("shot_1.dmat", feature_1);
 		//igl::readDMAT("shot_2.dmat", feature_2);
 		FeatureAlg::compute_shot(downsampled_v1, downsampled_vn1, downsampled_vc1, feature_1);
@@ -95,6 +104,9 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 
 	Eigen::Matrix4d trans_mat;
 	FastGlobalRegistration::optimize_pairwise(true, 64, downsampled_v1, downsampled_v2, corres, trans_mat);
+  double s = std::pow(trans_mat.determinant(), 1.0 / 3);
+  std::cout << trans_mat << std::endl;
+  std::cout << s << std::endl;
 
 	Eigen::Affine3d affine_trans(trans_mat);
 	Eigen::MatrixXd output_v2;
@@ -152,7 +164,7 @@ void main()
 	
 	//goicp_example("E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e44_vn_trimmed.ply", "E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e55_vn_trimmed.ply");
 
-	fgr_example("E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e44_vn_trimmed.ply", "E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e55_vn_trimmed.ply", "shot");
+	fgr_example("D:\\reg\\pairwise_no_noise_01_rot_05\\Depth_0000.ply", "D:\\reg\\pairwise_no_noise_01_rot_05\\Depth_0001.ply", "fpfh");
 
 	return;
 
