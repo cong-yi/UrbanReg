@@ -136,13 +136,13 @@ SSICP_PUBLIC Eigen::MatrixXd SSICP::FindCorrespondeces(const Eigen::MatrixXd &X,
   return Z;
 }
 
-SSICP_PUBLIC void SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &a,
+SSICP_PUBLIC bool SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &a,
   const double &b, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T)
 {
   // calculate X_tilde and Z_tilde
   size_t rows = X.rows(), cols = X.cols();
-  Eigen::RowVector3d x_c = X.colwise().sum() / static_cast<double>(rows);
-  Eigen::RowVector3d z_c = Z.colwise().sum() / static_cast<double>(rows);
+  Eigen::RowVector3d x_c = X.colwise().mean();
+  Eigen::RowVector3d z_c = Z.colwise().mean();
   Eigen::MatrixXd X_tilde(X), Z_tilde(Z);
   X_tilde.rowwise() -= x_c, Z_tilde.rowwise() -= z_c;
 
@@ -154,6 +154,13 @@ SSICP_PUBLIC void SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eige
     R = V * (U.transpose());
   else
   {
+	  if(abs(svd.singularValues().asDiagonal().toDenseMatrix().determinant()) > 1e-10)
+	  {
+		  std::cout << "Negative determinant of VU^t" << std::endl;
+		  std::cout << svd.singularValues() << std::endl;
+		  return false;
+	  }
+
     Eigen::Matrix3d I;
     I << 1, 0, 0,
       0, 1, 0,
@@ -162,13 +169,13 @@ SSICP_PUBLIC void SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eige
   }
 
   // update s
-  double num = Z_tilde.cwiseProduct(X_tilde * (R.transpose())).sum();
-  double den = X_tilde.cwiseProduct(X_tilde).sum();
+  double num = (Z_tilde.array() * (X_tilde * R.transpose()).array()).sum();
+  double den = (X_tilde.array() * X_tilde.array()).sum();
   s = num / den;
   if (s < a) s = a;
   if (s > b) s = b;
-
   T = z_c - s * x_c * (R.transpose());
+  return true;
 }
 
 SSICP_PUBLIC double SSICP::ComputeError(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &s,

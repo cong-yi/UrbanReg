@@ -18,7 +18,7 @@ namespace SSICP
   SSICP_PUBLIC Eigen::MatrixXd FindCorrespondeces(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &s,
     const Eigen::Matrix3d &R, const Eigen::RowVector3d &T);
   // Perform the second step of iteration
-  SSICP_PUBLIC void FindTransformation(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &a,
+  SSICP_PUBLIC bool FindTransformation(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &a,
     const double &b, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T);
   // Compute error for current parameters
   SSICP_PUBLIC double ComputeError(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &s,

@@ -5,7 +5,7 @@
 
 #define DIV_FACTOR			1.4		// Division factor used for graduated non-convexity
 #define USE_ABSOLUTE_SCALE	0		// Measure distance in absolute scale (1) or in scale relative to the diameter of the model (0)
-#define MAX_CORR_DIST		0.025	// Maximum correspondence distance (also see comment of USE_ABSOLUTE_SCALE)
+#define MAX_CORR_DIST		0.0001	// Maximum correspondence distance (also see comment of USE_ABSOLUTE_SCALE)
 #define TUPLE_SCALE			0.95	// Similarity measure used for tuples of feature points.
 #define TUPLE_MAX_CNT		1000	// Maximum tuple numbers.
 
@@ -302,7 +302,7 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
   printf("Pairwise rigid pose optimization\n");
   if (corres.size() < 10) return -1;
 
-  double par = 1.0f;
+  double par = 4.0f;
 
   // make a float copy of v2.
   Eigen::MatrixXf pcj_copy = v_2.cast<float>();
@@ -321,7 +321,14 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
     }
 
     Eigen::Matrix4f delta = update_ssicp(v_1, pcj_copy, corres, par);
-    trans = delta * trans;
+	  //here is a trick to combine two different optimization methods
+	  if(delta.determinant() < 0.5)
+	  {
+		  std::cout << "alternative computation" << std::endl;
+		  delta = update_fgr(v_1, pcj_copy, corres, par);
+	  }
+
+    trans = delta * trans.eval();
 
     // transform point clouds
     Eigen::Matrix3f R = delta.block<3, 3>(0, 0);
@@ -347,6 +354,7 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::Matri
   std::vector<double> s(corres.size(), 1.0);
   double r;
   double r2 = 0.0;
+  double e = 0;
   for (int c = 0; c < corres.size(); c++) {
     int ii = corres[c].first;
     int jj = corres[c].second;
@@ -359,6 +367,8 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::Matri
 
     float temp = mu / (rpq.dot(rpq) + mu);
     s[c2] = temp * temp;
+
+	e += temp * temp*rpq.dot(rpq) + mu * (temp - 1)*(temp - 1);
 
     J.setZero();
     J(1) = -q(2);
@@ -389,7 +399,7 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::Matri
 
     r2 += (mu * (1.0 - sqrt(s[c2])) * (1.0 - sqrt(s[c2])));
   }
-
+  std::cout << "energy: " << e << std::endl;
   Eigen::MatrixXd result(nvariable, 1);
   result = -JTJ.llt().solve(JTr);
 
@@ -405,6 +415,7 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::Matri
 FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
   const std::vector<std::pair<int, int>>& corres, const double mu)
 {
+	double e = 0;
   Eigen::MatrixXd X(corres.size(), 3), Z(corres.size(), 3);
   for (size_t i = 0; i < corres.size(); ++i)
   {
@@ -412,19 +423,27 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
     Eigen::Vector3f q = v_2.row(corres[i].second).transpose();
     Eigen::Vector3f rpq = p - q;
     double sqrtl = mu / (rpq.dot(rpq) + mu);
+	e += sqrtl * sqrtl*rpq.dot(rpq) + mu * (sqrtl - 1)*(sqrtl - 1);
 
     X.row(i) = sqrtl * v_2.row(corres[i].second).cast<double>();
     Z.row(i) = sqrtl * v_1.row(corres[i].first).cast<double>();
   }
-
+  std::cout << "energy: " << e << std::endl;
   double s = 1, a = 0.9 * s, b = 1.1 * s;
   Eigen::Matrix3d R;
   Eigen::RowVector3d T;
-  SSICP::FindTransformation(X, Z, a, b, s, R, T);
+  if(!SSICP::FindTransformation(X, Z, a, b, s, R, T))
+  {
+	  R.setZero();
+  }
+
+  //std::cout << R * R.transpose().eval() << std::endl;
 
   Eigen::Matrix4d trans;
+  trans.setZero();
   trans.block<3, 3>(0, 0) = s * R;
   trans.block<3, 1>(0, 3) = T.transpose();
   trans(3, 3) = 1;
+
   return trans.cast<float>();
 }

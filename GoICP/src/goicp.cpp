@@ -100,6 +100,9 @@ void GOICP::goicp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen:
 		affine_mat(i, 3) = static_cast<double>(goicp.optT.val[i][0]);
 	}
 	affine_mat(3, 3) = 1;
+
+	std::cout << affine_mat << std::endl;
+
 	Eigen::Affine3d affine_trans(affine_mat);
 	Eigen::MatrixXd output_tmp;
 	output_tmp.resize(v_2.rows(), 3);

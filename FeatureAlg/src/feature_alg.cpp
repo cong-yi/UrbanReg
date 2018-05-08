@@ -8,6 +8,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/registration/icp.h>
 #include <igl/writeOBJ.h>
+#include <pcl/features/multiscale_feature_persistence.h>
 #include <chrono>
 
 void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
@@ -35,20 +36,21 @@ void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
 
 void FeatureAlg::compute_fpfh(const Eigen::MatrixXd& v, const Eigen::MatrixXd& vn, Eigen::MatrixXd& fpfh)
 {
-	pcl::PointCloud<pcl::PointNormal>::Ptr object(new pcl::PointCloud<pcl::PointNormal>);
-
+	pcl::PointCloud<pcl::PointXYZ>::Ptr object(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
 	if(vn.rows() == v.rows())
 	{
 		object->points.resize(v.rows());
+		normals->points.resize(vn.rows());
 		for (int i = 0; i < v.rows(); ++i)
 		{
 			for (int j = 0; j < 3; ++j)
 			{
 				object->points[i].data[j] = static_cast<float>(v(i, j));
-				object->points[i].data_n[j] = static_cast<float>(vn(i, j));
+				normals->points[i].data_n[j] = static_cast<float>(vn(i, j));
 			}
 			object->points[i].data[3] = 1.0f;
-			object->points[i].data_n[3] = 0.0f;
+			normals->points[i].data_n[3] = 0.0f;
 		}
 	}
 	else
@@ -90,14 +92,24 @@ void FeatureAlg::compute_fpfh(const Eigen::MatrixXd& v, const Eigen::MatrixXd& v
 	}
 	std::cout << "Start FPFH computation..." << std::endl;
 	auto time_start = std::chrono::high_resolution_clock::now();
-	pcl::FPFHEstimationOMP<pcl::PointNormal, pcl::PointNormal, pcl::FPFHSignature33> fest;
+	pcl::FPFHEstimationOMP<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33>::Ptr fest(new pcl::FPFHEstimationOMP<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33>());
 	pcl::PointCloud<pcl::FPFHSignature33>::Ptr object_features(new pcl::PointCloud<pcl::FPFHSignature33>());
 	double feature_radius = 0.1;
-	
-	fest.setRadiusSearch(feature_radius);
-	fest.setInputCloud(object);
-	fest.setInputNormals(object);
-	fest.compute(*object_features);
+
+	fest->setRadiusSearch(feature_radius);
+	//fest->setKSearch(400);
+	fest->setInputCloud(object);
+	fest->setInputNormals(normals);
+	fest->compute(*object_features);
+
+	//pcl::MultiscaleFeaturePersistence<pcl::PointXYZ, pcl::FPFHSignature33> fper;
+	//boost::shared_ptr<std::vector<int> > keypoints;
+	//std::vector<float> scale_values = { 0.5f, 1.0f, 1.5f };
+	//fper.setScalesVector(scale_values);
+	//fper.setAlpha(1.3f);
+	//fper.setFeatureEstimator(fest);
+	//fper.setDistanceMetric(pcl::L2);
+	//fper.determinePersistentFeatures(*object_features, keypoints);
 
 	fpfh.resize(v.rows(), object_features->points[0].descriptorSize());
 	for(int i = 0; i < fpfh.rows(); ++i)
