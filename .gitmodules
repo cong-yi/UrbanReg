@@ -19,3 +19,6 @@
 [submodule "External/gptoolbox"]
 	path = External/gptoolbox
 	url = https://github.com/alecjacobson/gptoolbox.git
+[submodule "External/spectra"]
+	path = External/spectra
+	url = https://github.com/yixuan/spectra.git

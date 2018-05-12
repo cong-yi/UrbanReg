@@ -6,7 +6,6 @@
 #include <pcl/common/transforms.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/io/ply_io.h>
-#include <pcl/registration/icp.h>
 #include <igl/writeOBJ.h>
 #include <pcl/features/multiscale_feature_persistence.h>
 #include <chrono>
@@ -173,56 +172,4 @@ void FeatureAlg::compute_shot(const Eigen::MatrixXd& v, const Eigen::MatrixXd& v
 		}
 	}
 	return;
-}
-
-void FeatureAlg::icp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::MatrixXd& aligned_v_2)
-{
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_1(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_2(new pcl::PointCloud<pcl::PointXYZ>);
-
-	cloud_1->points.resize(v_1.rows());
-	for (int i = 0; i < v_1.rows(); ++i)
-	{
-		for (int j = 0; j < 3; ++j)
-		{
-			cloud_1->points[i].data[j] = static_cast<float>(v_1(i, j));
-		}
-		cloud_1->points[i].data[3] = 1.0f;
-	}
-
-	cloud_2->points.resize(v_2.rows());
-	for (int i = 0; i < v_2.rows(); ++i)
-	{
-		for (int j = 0; j < 3; ++j)
-		{
-			cloud_2->points[i].data[j] = static_cast<float>(v_2(i, j));
-		}
-		cloud_2->points[i].data[3] = 1.0f;
-	}
-
-	pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
-	icp.setInputCloud(cloud_2);
-	icp.setInputTarget(cloud_1);
-
-	icp.setMaxCorrespondenceDistance(0.1);
-	icp.setMaximumIterations(50);
-	icp.setTransformationEpsilon(1e-8);
-	icp.setEuclideanFitnessEpsilon(1);
-
-	pcl::PointCloud<pcl::PointXYZ> final;
-	icp.align(final);
-	std::cout << "has converged:" << icp.hasConverged() << " score: " <<
-		icp.getFitnessScore() << std::endl;
-	std::cout << icp.getFinalTransformation() << std::endl;
-
-	std::cout << icp.getFinalTransformation() * icp.getFinalTransformation().transpose().eval() << std::endl;
-
-	aligned_v_2.resize(final.points.size(), 3);
-	for(int i = 0; i < final.points.size(); ++i)
-	{
-		for (int j = 0; j < 3; ++j)
-		{
-			aligned_v_2(i, j) = static_cast<double>(final.points[i].data[j]);
-		}
-	}
 }

@@ -2,12 +2,17 @@
 #include <flann/flann.hpp>
 
 #include "./ScaleStretchICP/include/ssicp.h"
+#include <pcl/sample_consensus/sac_model_registration.h>
+#include <igl/slice.h>
+#include <pcl/sample_consensus/ransac.h>
 
 #define DIV_FACTOR			1.4		// Division factor used for graduated non-convexity
 #define USE_ABSOLUTE_SCALE	0		// Measure distance in absolute scale (1) or in scale relative to the diameter of the model (0)
 #define MAX_CORR_DIST		0.0001	// Maximum correspondence distance (also see comment of USE_ABSOLUTE_SCALE)
 #define TUPLE_SCALE			0.95	// Similarity measure used for tuples of feature points.
 #define TUPLE_MAX_CNT		1000	// Maximum tuple numbers.
+#define SHOW_DEBUG_INFO
+#define USE_RANSAC
 
 void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
   Eigen::VectorXf& input,
@@ -32,33 +37,11 @@ void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
   index->knnSearch(query_mat, indices_mat, dists_mat, nn, flann::SearchParams(128));
 }
 
-void FastGlobalRegistration::normalize(const Eigen::VectorXd& min_corner, const Eigen::VectorXd& max_corner, Eigen::MatrixXd& v)
-{
-  assert(min_corner.size() == v.cols());
-  assert(max_corner.size() == v.cols());
-  Eigen::VectorXd min_v = v.colwise().minCoeff();
-  Eigen::VectorXd max_v = v.colwise().maxCoeff();
-  Eigen::RowVectorXd bbox_center(min_v.rows());
-  double max_range = std::numeric_limits<double>::min();
-  int m_id = -1;
-  for (int i = 0; i < v.cols(); i++)
-  {
-    double range = max_v[i] - min_v[i];
-    if (range > max_range)
-    {
-      max_range = range;
-      m_id = i;
-    }
-    bbox_center(i) = (min_v(i) + max_v(i)) * 0.5;
-  }
-  double scale_ratio = (max_corner[m_id] - min_corner[m_id]) / max_range;
-  v = (v.rowwise() - bbox_center) * scale_ratio;
-  Eigen::RowVectorXd trans = (max_corner + min_corner) * 0.5;
-  v.rowwise() += trans;
-}
-
 void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, const Eigen::MatrixXd& fpfh_1, const Eigen::MatrixXd& fpfh_2, std::vector<std::pair<int, int> >& corres)
 {
+	clock_t start = clock();
+	std::cout << "start matching" << std::endl;
+
   std::vector<const Eigen::MatrixXd *> pointcloud(2);
   pointcloud[0] = &v_1;
   pointcloud[1] = &v_2;
@@ -295,6 +278,7 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
   }
 
   printf("\t[final] matches %d.\n", (int)corres.size());
+  std::cout << "end matching " << static_cast<double>(clock() - start) / CLOCKS_PER_SEC << "s" << std::endl;
 }
 
 double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter, const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, const std::vector<std::pair<int, int> >& corres, Eigen::Matrix4d& trans_mat)
@@ -321,12 +305,13 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
     }
 
     Eigen::Matrix4f delta = update_ssicp(v_1, pcj_copy, corres, par);
+	//Eigen::Matrix4f delta = update_fgr(v_1, pcj_copy, corres, par);
 	  //here is a trick to combine two different optimization methods
-	  if(delta.determinant() < 0.5)
-	  {
-		  std::cout << "alternative computation" << std::endl;
-		  delta = update_fgr(v_1, pcj_copy, corres, par);
-	  }
+	  //if(delta.determinant() < 0.5)
+	  //{
+		 // std::cout << "alternative computation" << std::endl;
+		 // delta = update_fgr(v_1, pcj_copy, corres, par);
+	  //}
 
     trans = delta * trans.eval();
 
@@ -415,7 +400,9 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::Matri
 FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
   const std::vector<std::pair<int, int>>& corres, const double mu)
 {
+#ifdef SHOW_DEBUG_INFO
 	double e = 0;
+#endif
   Eigen::MatrixXd X(corres.size(), 3), Z(corres.size(), 3);
   for (size_t i = 0; i < corres.size(); ++i)
   {
@@ -423,21 +410,68 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
     Eigen::Vector3f q = v_2.row(corres[i].second).transpose();
     Eigen::Vector3f rpq = p - q;
     double sqrtl = mu / (rpq.dot(rpq) + mu);
+#ifdef SHOW_DEBUG_INFO
 	e += sqrtl * sqrtl*rpq.dot(rpq) + mu * (sqrtl - 1)*(sqrtl - 1);
+#endif
 
     X.row(i) = sqrtl * v_2.row(corres[i].second).cast<double>();
     Z.row(i) = sqrtl * v_1.row(corres[i].first).cast<double>();
   }
+#ifdef SHOW_DEBUG_INFO
   std::cout << "energy: " << e << std::endl;
+#endif
+#ifdef USE_RANSAC
+  Eigen::MatrixXi corres_mat(corres.size(), 2);
+  for (int i = 0; i < corres.size(); ++i)
+  {
+	  corres_mat(i, 0) = corres[i].first;
+	  corres_mat(i, 1) = corres[i].second;
+  }
+  Eigen::MatrixXd feature_1 = igl::slice(v_1, corres_mat.col(0), 1);
+  Eigen::MatrixXf feature_2 = igl::slice(v_2, corres_mat.col(1), 1);
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud_1(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud_2(new pcl::PointCloud<pcl::PointXYZ>);
+  pointcloud_1->points.resize(feature_1.rows());
+  pointcloud_2->points.resize(feature_2.rows());
+  for (int i = 0; i < corres_mat.rows(); ++i)
+  {
+	  for (int j = 0; j < 3; ++j)
+	  {
+		  pointcloud_1->points[i].data[j] = static_cast<float>(feature_1(i, j));
+		  pointcloud_2->points[i].data[j] = static_cast<float>(feature_2(i, j));
+	  }
+	  pointcloud_1->points[i].data[3] = 1.0f;
+	  pointcloud_2->points[i].data[3] = 1.0f;
+  }
+
+  pcl::SampleConsensusModelRegistration<pcl::PointXYZ>::Ptr model_r(new pcl::SampleConsensusModelRegistration<pcl::PointXYZ>(pointcloud_2));
+  model_r->setInputTarget(pointcloud_1);
+  Eigen::VectorXf coeff;
+  pcl::RandomSampleConsensus<pcl::PointXYZ> ransac(model_r, 0.05);
+  ransac.computeModel(0);
+  ransac.getModelCoefficients(coeff);
+  Eigen::Matrix4f transform_ransac;
+  std::cout << "RANSAC transformation: " << std::endl;
+  for (size_t i = 0; i<16; i++) {
+	  transform_ransac(i / 4, i % 4) = coeff[i];
+  }
+  std::cout << transform_ransac << std::endl;
+  std::vector<int> inlier_vec;
+  ransac.getInliers(inlier_vec);
+  Eigen::VectorXi inlier_ids = Eigen::Map<Eigen::VectorXi>(&inlier_vec[0], inlier_vec.size());
+  std::cout << "inlier num: " << inlier_ids.rows() << std::endl;
+  Z = igl::slice(feature_1, inlier_ids, 1);
+  X = igl::slice(feature_2, inlier_ids, 1).cast<double>();
+#endif
   double s = 1, a = 0.9 * s, b = 1.1 * s;
   Eigen::Matrix3d R;
   Eigen::RowVector3d T;
   if(!SSICP::FindTransformation(X, Z, a, b, s, R, T))
   {
+	  std::cout << "failed!" << std::endl;
 	  R.setZero();
   }
-
-  //std::cout << R * R.transpose().eval() << std::endl;
 
   Eigen::Matrix4d trans;
   trans.setZero();
