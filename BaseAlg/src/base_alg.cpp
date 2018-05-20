@@ -54,7 +54,7 @@ void BaseAlg::icp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen:
 	}
 }
 
-void BaseAlg::normalize(const Eigen::VectorXd& min_corner, const Eigen::VectorXd& max_corner, Eigen::MatrixXd& v)
+Eigen::Matrix4d BaseAlg::normalize(const Eigen::VectorXd& min_corner, const Eigen::VectorXd& max_corner, Eigen::MatrixXd& v)
 {
 	assert(min_corner.size() == v.cols());
 	assert(max_corner.size() == v.cols());
@@ -77,6 +77,16 @@ void BaseAlg::normalize(const Eigen::VectorXd& min_corner, const Eigen::VectorXd
 	v = (v.rowwise() - bbox_center) * scale_ratio;
 	Eigen::RowVectorXd trans = (max_corner + min_corner) * 0.5;
 	v.rowwise() += trans;
+
+	Eigen::Matrix4d trans_mat;
+	trans_mat.setZero();
+	for(int i = 0; i < 3; ++i)
+	{
+		trans_mat(i, i) = scale_ratio;
+		trans_mat(i, 3) = trans(i) - scale_ratio * bbox_center(i);
+	}
+	trans_mat(3, 3) = 1;
+	return trans_mat;
 }
 
 int BaseAlg::pca(const Eigen::MatrixXd& data_mat, int ev_num, Eigen::VectorXd& eigen_values, Eigen::MatrixXd& eigen_vectors)

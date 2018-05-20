@@ -8,6 +8,7 @@
 #include "kdtree.h"
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
+#include <igl/slice_mask.h>
 
 void EigenvaluesAndEigenvectors(const Eigen::Matrix3d &A, std::vector<double> &eigenvalues,
   std::vector<Eigen::Vector3d> &eigenvectors)
@@ -77,7 +78,7 @@ SSICP_PUBLIC void SSICP::Initialize(const Eigen::MatrixXd &X, const Eigen::Matri
   T = y_c - x_c;
 }
 
-SSICP_PUBLIC void SSICP::Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &a, const double &b,
+SSICP_PUBLIC void SSICP::Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &a, const double &b, const double& trim_thre,
   const double &epsilon, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T)
 {
   size_t counter = 0;
@@ -88,10 +89,34 @@ SSICP_PUBLIC void SSICP::Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd
     printf("Iteration %zu:\n", counter);
 
     Eigen::MatrixXd Z = FindCorrespondeces(X, Y, s, R, T);
-    double error = ComputeError(X, Z, s, R, T);
+	Eigen::MatrixXd filtered_X, filtered_Z;
+	if(trim_thre > 0)
+	{
+		Eigen::Array<bool, Eigen::Dynamic, 1> feature_mask(X.rows());
+		for (int i = 0; i < Z.rows(); ++i)
+		{
+			if ((X.row(i) - Z.row(i)).norm() > trim_thre)
+			{
+				feature_mask(i) = false;
+			}
+			else
+			{
+				feature_mask(i) = true;
+			}
+		}
+		filtered_X = igl::slice_mask(X, feature_mask, 1);
+		filtered_Z = igl::slice_mask(Z, feature_mask, 1);
+	}
+	else
+	{
+		filtered_X = X;
+		filtered_Z = Z;
+	}
+
+    double error = ComputeError(filtered_X, filtered_Z, s, R, T);
     printf("Error after the first step: %lf\n", error);
-    FindTransformation(X, Z, a, b, s, R, T);
-    error = ComputeError(X, Z, s, R, T);
+    FindTransformation(filtered_X, filtered_Z, a, b, s, R, T);
+    error = ComputeError(filtered_X, filtered_Z, s, R, T);
     printf("Error after the second step: %lf\n", error);
     
     if (counter > 1)
@@ -207,13 +232,34 @@ SSICP_PUBLIC Eigen::MatrixXd SSICP::GetTransformed(const Eigen::MatrixXd &X, con
 
 SSICP_PUBLIC Eigen::MatrixXd SSICP::Align(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y)
 {
-  double s, a, b, epsilon = 0.001;
+  double s, a, b, epsilon = 0.001, trim_thre = -1;
   Eigen::Matrix3d R;
   Eigen::RowVector3d T;
   Initialize(X, Y, s, a, b, R, T);
 #ifndef NDEBUG
   OutputParameters(s, a, b, R, T);
 #endif // NDEBUG
-  Iterate(X, Y, a, b, epsilon, s, R, T);
+  Iterate(X, Y, a, b, trim_thre, epsilon, s, R, T);
   return GetTransformed(X, s, R, T);
+}
+
+
+SSICP_PUBLIC Eigen::Matrix4d SSICP::GetOptimalTrans(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double& trim_thre,
+	const double &epsilon)
+{
+	double s = 1, a = 0.9, b = 1.1;
+	Eigen::Matrix3d R;
+	Eigen::RowVector3d T;
+	R.setIdentity();
+	T.setZero();
+
+	Iterate(X, Y, a, b, trim_thre, epsilon, s, R, T);
+	Eigen::Matrix4d trans_mat;
+	trans_mat.setZero();
+	trans_mat.block<3, 3>(0, 0) = R;
+	trans_mat.block<3, 3>(0, 0) = s * R;
+	trans_mat.block<3, 1>(0, 3) = T.transpose();
+	trans_mat(3, 3) = 1;
+
+	return trans_mat;
 }

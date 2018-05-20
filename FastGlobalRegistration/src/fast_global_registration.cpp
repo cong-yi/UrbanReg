@@ -12,7 +12,7 @@
 #define TUPLE_SCALE			0.95	// Similarity measure used for tuples of feature points.
 #define TUPLE_MAX_CNT		1000	// Maximum tuple numbers.
 #define SHOW_DEBUG_INFO
-#define USE_RANSAC
+//#define USE_RANSAC
 
 void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
   Eigen::VectorXf& input,
@@ -417,6 +417,7 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
     X.row(i) = sqrtl * v_2.row(corres[i].second).cast<double>();
     Z.row(i) = sqrtl * v_1.row(corres[i].first).cast<double>();
   }
+
 #ifdef SHOW_DEBUG_INFO
   std::cout << "energy: " << e << std::endl;
 #endif
@@ -464,14 +465,17 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
   Z = igl::slice(feature_1, inlier_ids, 1);
   X = igl::slice(feature_2, inlier_ids, 1).cast<double>();
 #endif
-  double s = 1, a = 0.9 * s, b = 1.1 * s;
-  Eigen::Matrix3d R;
-  Eigen::RowVector3d T;
-  if(!SSICP::FindTransformation(X, Z, a, b, s, R, T))
-  {
-	  std::cout << "failed!" << std::endl;
-	  R.setZero();
-  }
+  Eigen::RowVector3d x_c = X.colwise().mean();
+  Eigen::RowVector3d z_c = Z.colwise().mean();
+  Eigen::MatrixXd X_tilde(X), Z_tilde(Z);
+  X_tilde.rowwise() -= x_c, Z_tilde.rowwise() -= z_c;
+
+	Eigen::Matrix4f affine_mat = FastGlobalRegistration::update_fgr(v_1, v_2, corres, mu);
+	Eigen::Matrix3d R = affine_mat.block<3, 3>(0, 0).cast<double>();
+	double num = (Z_tilde.array() * (X_tilde * R.transpose()).array()).sum();
+	double den = (X_tilde.array() * X_tilde.array()).sum();
+	double s = num / den;
+	Eigen::RowVector3d T = z_c - s * x_c * (R.transpose());
 
   Eigen::Matrix4d trans;
   trans.setZero();

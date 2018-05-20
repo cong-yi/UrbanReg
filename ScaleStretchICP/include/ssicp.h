@@ -12,7 +12,7 @@ namespace SSICP
     double &s, double &a, double &b, Eigen::Matrix3d &R, Eigen::RowVector3d &T);
 
   // The iterative algorithm
-  SSICP_PUBLIC void Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &a, const double &b,
+  SSICP_PUBLIC void Iterate(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &a, const double &b, const double& trim_thre,
     const double &epsilon, double &s, Eigen::Matrix3d &R, Eigen::RowVector3d &T);
   // Perform the first step of iteration
   SSICP_PUBLIC Eigen::MatrixXd FindCorrespondeces(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &s,
@@ -31,8 +31,12 @@ namespace SSICP
   SSICP_PUBLIC Eigen::MatrixXd GetTransformed(const Eigen::MatrixXd &X, const double &s, const Eigen::MatrixX3d &R,
     const Eigen::RowVector3d &T);
 
-  // The overall process of SSICP
-  SSICP_PUBLIC Eigen::MatrixXd Align(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y);
+	// The overall process of SSICP
+	SSICP_PUBLIC Eigen::MatrixXd Align(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y);
+
+	// Return the transformation T, s.t. min||TX-Y||
+	SSICP_PUBLIC Eigen::Matrix4d GetOptimalTrans(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double& trim_thre,
+		const double &epsilon);
 }
 
 #endif
