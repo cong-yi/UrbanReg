@@ -173,3 +173,69 @@ void FeatureAlg::compute_shot(const Eigen::MatrixXd& v, const Eigen::MatrixXd& v
 	}
 	return;
 }
+
+void FeatureAlg::compute_shot(const Eigen::MatrixXd& downsampled_v, const Eigen::MatrixXd& v, const Eigen::MatrixXd& vn, const Eigen::MatrixXd& downsampled_vc, const Eigen::MatrixXd& vc, Eigen::MatrixXd& shot)
+{
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsampled_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr search_surface(new pcl::PointCloud<pcl::PointXYZRGB>);
+	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud< pcl::Normal>);
+
+	if (vn.rows() == v.rows() && downsampled_v.rows() == downsampled_vc.rows())
+	{
+		downsampled_cloud->points.resize(downsampled_v.rows());
+		for (int i = 0; i < downsampled_v.rows(); ++i)
+		{
+			for (int j = 0; j < 3; ++j)
+			{
+				downsampled_cloud->points[i].data[j] = static_cast<float>(downsampled_v(i, j));
+			}
+			downsampled_cloud->points[i].r = static_cast<uint8_t>(downsampled_vc(i, 0));
+			downsampled_cloud->points[i].g = static_cast<uint8_t>(downsampled_vc(i, 1));
+			downsampled_cloud->points[i].b = static_cast<uint8_t>(downsampled_vc(i, 2));
+			downsampled_cloud->points[i].a = 255;
+			downsampled_cloud->points[i].data[3] = 1.0f;
+			
+		}
+		search_surface->points.resize(v.rows());
+		normals->points.resize(vn.rows());
+		for(int i = 0; i < v.rows(); ++i)
+		{
+			for (int j = 0; j < 3; ++j)
+			{
+				search_surface->points[i].data[j] = static_cast<float>(v(i, j));
+				normals->points[i].data_n[j] = static_cast<float>(vn(i, j));
+			}
+			search_surface->points[i].r = static_cast<uint8_t>(vc(i, 0));
+			search_surface->points[i].g = static_cast<uint8_t>(vc(i, 1));
+			search_surface->points[i].b = static_cast<uint8_t>(vc(i, 2));
+			search_surface->points[i].a = 255;
+			search_surface->points[i].data[3] = 1.0f;
+			normals->points[i].data_n[3] = 0.0f;
+		}
+	}
+	// Setup the SHOT features
+	typedef pcl::SHOT1344 ShotFeature;
+	pcl::SHOTColorEstimationOMP<pcl::PointXYZRGB, pcl::Normal, ShotFeature> shotEstimation;
+	shotEstimation.setInputCloud(downsampled_cloud);
+	shotEstimation.setInputNormals(normals);
+	shotEstimation.setSearchSurface(search_surface);
+
+	pcl::PointCloud<ShotFeature>::Ptr shotFeatures(new pcl::PointCloud<ShotFeature>);
+	shotEstimation.setRadiusSearch(0.1);
+
+	// Actually compute the spin images
+	shotEstimation.compute(*shotFeatures);
+	std::cout << "SHOT output points.size (): " << shotFeatures->points.size() << std::endl;
+
+	std::cout << "SHOT output feature length: " << shotFeatures->points[0].descriptorSize() << std::endl;
+
+	shot.resize(downsampled_v.rows(), shotFeatures->points[0].descriptorSize());
+	for (int i = 0; i < shot.rows(); ++i)
+	{
+		for (int j = 0; j < shot.cols(); ++j)
+		{
+			shot(i, j) = static_cast<double>(shotFeatures->points[i].descriptor[j]);
+		}
+	}
+	return;
+}

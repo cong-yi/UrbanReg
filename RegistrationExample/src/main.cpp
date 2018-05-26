@@ -125,8 +125,10 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 				//std::cout << feature_1.rows() << std::endl;
 				//feature_1.conservativeResize(sampling_num, 3);
 				//feature_2.conservativeResize(sampling_num, 3);
-				FeatureAlg::compute_shot(downsampled_v1, downsampled_vn1, downsampled_vc1, feature_1);
-				FeatureAlg::compute_shot(downsampled_v2, downsampled_vn2, downsampled_vc2, feature_2);
+				//FeatureAlg::compute_shot(downsampled_v1, downsampled_vn1, downsampled_vc1, feature_1);
+				//FeatureAlg::compute_shot(downsampled_v2, downsampled_vn2, downsampled_vc2, feature_2);
+				FeatureAlg::compute_shot(downsampled_v1, v_1, vn_1, downsampled_vc1, vc_1, feature_1);
+				FeatureAlg::compute_shot(downsampled_v2, v_2, vn_2, downsampled_vc2, vc_2, feature_2);
 			}
 			//igl::writeDMAT(feature_type + "_1.dmat", feature_1, false);
 			//igl::writeDMAT(feature_type + "_2.dmat", feature_2, false);
@@ -256,7 +258,7 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 
 	//visualize the feature correspondences
 	Eigen::MatrixXd vcolor;
-	igl::jet(corres_v_1.col(1), true, vcolor);
+	igl::jet(corres_v_1.col(0), true, vcolor);
 	vcolor *= 255;
 
 	std::cout << (clock() - begin) / CLOCKS_PER_SEC << "s" << std::endl;
@@ -277,7 +279,7 @@ void fgr_example(const std::string& pointcloud_a, const std::string& pointcloud_
 void main()
 {
 	//Eigen::MatrixXd v, vc, vn;
-	//DataIO::read_ply("E:\\Data\\m4\\scene_dense.ply", v, vc, vn);
+	//DataIO::read_ply("E:\\Data\\e9\\scene_dense.ply", v, vc, vn);
 	//std::cout << v.rows() << " " << v.cols() << std::endl;
 
 	//Eigen::MatrixXd down_sampled_v, down_sampled_vc, down_sample_vn;
@@ -300,24 +302,26 @@ void main()
 	//	down_sampled_vc.row(i) = vc.row(row_id);
 	//	down_sample_vn.row(i) = vn.row(row_id);
 	//}
-	//DataIO::write_ply("downsampled_m4.ply", down_sampled_v, down_sampled_vc, down_sample_vn);
+	//DataIO::write_ply("downsampled_e9.ply", down_sampled_v, down_sampled_vc, down_sample_vn);
 	//return;
+
 	//icp_example("E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e44_vn_trimmed.ply", "E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e55_vn_trimmed.ply");
 
 	//fgr_example("E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_01_rot_05\\Depth_0000.ply", "E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_01_rot_05\\Depth_0001.ply", "fpfh");
-	fgr_example("out_m3_trimmed.ply", "out_m4_trimmed.ply", "shot", "shot_corres.dmat");
-
+	fgr_example("out_m4_trimmed2.ply", "out_m8_trimmed2.ply", "shot", "shot_corres.dmat");
+	//fgr_example("E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_01_rot_05\\Depth_0000.ply", "E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_01_rot_05\\Depth_0001.ply", "shot", "");
 
 	//Eigen::Matrix4d affine_trans_mat;
 	//igl::readDMAT("affine_trans.dmat", affine_trans_mat);
 	//std::cout << affine_trans_mat << std::endl;
-
+	//Eigen::Matrix3d R = affine_trans_mat.block<3, 3>(0, 0);
 	//Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2;
 
-	//DataIO::read_ply("out_m4.ply", v_1, vc_1, vn_1);
+	//DataIO::read_ply("out_m3.ply", v_1, vc_1, vn_1);
 	//v_2 = (v_1.rowwise().homogeneous() * affine_trans_mat.transpose()).leftCols(3);
-	//DataIO::write_ply("out_m4_aligned.ply", v_2, vc_1, vn_1);
-	return;
+	//vn_2 = vn_1 * R.transpose();
+	//DataIO::write_ply("out_m3_aligned.ply", v_2, vc_1, vn_2);
+	//return;
 
 	return;
 }

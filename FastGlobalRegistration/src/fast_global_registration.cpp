@@ -397,12 +397,74 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::Matri
   return aff_mat.matrix().cast<float>();
 }
 
+Eigen::Matrix3d FastGlobalRegistration::compute_r(const Eigen::MatrixXd &p_mat, const Eigen::MatrixXd &q_mat, const double mu)
+{
+	const int nvariable = 3;	// 3 for rotation
+	Eigen::MatrixXd JTJ(nvariable, nvariable);
+	Eigen::MatrixXd JTr(nvariable, 1);
+	Eigen::MatrixXd J(nvariable, 1);
+	JTJ.setZero();
+	JTr.setZero();
+
+	std::vector<double> s(p_mat.rows(), 1.0);
+	double r;
+	double r2 = 0.0;
+	for (int c = 0; c < s.size(); c++) {
+		Eigen::Vector3d p = p_mat.row(c).transpose();
+		Eigen::Vector3d q = q_mat.row(c).transpose();
+		Eigen::Vector3d rpq = p - q;
+
+		int c2 = c;
+
+		double temp = mu / (rpq.dot(rpq) + mu);
+		s[c2] = temp * temp;
+
+		J.setZero();
+		J(1) = -q(2);
+		J(2) = q(1);
+		r = rpq(0);
+		JTJ += J * J.transpose() * s[c2];
+		JTr += J * r * s[c2];
+		r2 += r * r * s[c2];
+
+		J.setZero();
+		J(2) = -q(0);
+		J(0) = q(2);
+		r = rpq(1);
+		JTJ += J * J.transpose() * s[c2];
+		JTr += J * r * s[c2];
+		r2 += r * r * s[c2];
+
+		J.setZero();
+		J(0) = -q(1);
+		J(1) = q(0);
+		r = rpq(2);
+		JTJ += J * J.transpose() * s[c2];
+		JTr += J * r * s[c2];
+		r2 += r * r * s[c2];
+
+		r2 += (mu * (1.0 - sqrt(s[c2])) * (1.0 - sqrt(s[c2])));
+	}
+
+	Eigen::MatrixXd result(nvariable, 1);
+	result = -JTJ.llt().solve(JTr);
+	Eigen::Matrix3d r_mat;
+	r_mat = Eigen::AngleAxisd(result(2), Eigen::Vector3d::UnitZ())
+							* Eigen::AngleAxisd(result(1), Eigen::Vector3d::UnitY()) 
+							* Eigen::AngleAxisd(result(0), Eigen::Vector3d::UnitX());
+	return r_mat;
+}
+
 FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
   const std::vector<std::pair<int, int>>& corres, const double mu)
 {
 #ifdef SHOW_DEBUG_INFO
 	double e = 0;
 #endif
+	double sum_l = 0;
+	Eigen::RowVector3d sum_l_p(0, 0, 0);
+	Eigen::RowVector3d sum_l_q(0, 0, 0);
+	Eigen::VectorXd sqrtl_vec(corres.size());
   Eigen::MatrixXd X(corres.size(), 3), Z(corres.size(), 3);
   for (size_t i = 0; i < corres.size(); ++i)
   {
@@ -410,6 +472,11 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
     Eigen::Vector3f q = v_2.row(corres[i].second).transpose();
     Eigen::Vector3f rpq = p - q;
     double sqrtl = mu / (rpq.dot(rpq) + mu);
+	sqrtl_vec(i) = sqrtl;
+	double l = sqrtl * sqrtl;
+	sum_l += l;
+	sum_l_p += l * p.transpose().cast<double>();
+	sum_l_q += l * q.transpose().cast<double>();
 #ifdef SHOW_DEBUG_INFO
 	e += sqrtl * sqrtl*rpq.dot(rpq) + mu * (sqrtl - 1)*(sqrtl - 1);
 #endif
@@ -417,6 +484,8 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
     X.row(i) = sqrtl * v_2.row(corres[i].second).cast<double>();
     Z.row(i) = sqrtl * v_1.row(corres[i].first).cast<double>();
   }
+  X -= (sqrtl_vec * sum_l_q / sum_l);
+  Z -= (sqrtl_vec * sum_l_p / sum_l);
 
 #ifdef SHOW_DEBUG_INFO
   std::cout << "energy: " << e << std::endl;
@@ -465,17 +534,13 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
   Z = igl::slice(feature_1, inlier_ids, 1);
   X = igl::slice(feature_2, inlier_ids, 1).cast<double>();
 #endif
-  Eigen::RowVector3d x_c = X.colwise().mean();
-  Eigen::RowVector3d z_c = Z.colwise().mean();
-  Eigen::MatrixXd X_tilde(X), Z_tilde(Z);
-  X_tilde.rowwise() -= x_c, Z_tilde.rowwise() -= z_c;
 
-	Eigen::Matrix4f affine_mat = FastGlobalRegistration::update_fgr(v_1, v_2, corres, mu);
-	Eigen::Matrix3d R = affine_mat.block<3, 3>(0, 0).cast<double>();
-	double num = (Z_tilde.array() * (X_tilde * R.transpose()).array()).sum();
-	double den = (X_tilde.array() * X_tilde.array()).sum();
+	Eigen::Matrix3d R = FastGlobalRegistration::compute_r(Z, X, mu);
+
+	double num = (Z.array() * (X * R.transpose()).array()).sum();
+	double den = (X.array() * X.array()).sum();
 	double s = num / den;
-	Eigen::RowVector3d T = z_c - s * x_c * (R.transpose());
+	Eigen::RowVector3d T = sum_l_p / sum_l - s * sum_l_q / sum_l * (R.transpose());
 
   Eigen::Matrix4d trans;
   trans.setZero();

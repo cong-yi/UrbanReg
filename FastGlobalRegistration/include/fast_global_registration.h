@@ -11,6 +11,7 @@ namespace FastGlobalRegistration
 
   FGR_PUBLIC Eigen::Matrix4f update_fgr(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
     const std::vector<std::pair<int, int>> &corres, const double mu);
+  FGR_PUBLIC Eigen::Matrix3d compute_r(const Eigen::MatrixXd &p_mat, const Eigen::MatrixXd &q_mat, const double mu);
   FGR_PUBLIC Eigen::Matrix4f update_ssicp(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
     const std::vector<std::pair<int, int>> &corres, const double mu);
 }
