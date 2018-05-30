@@ -20,6 +20,16 @@ namespace RegPipeline
   // filenames[2]: output filename of point cloud a
   // filenames[3]: output filename of point cloud b
   REGPIPELINE_PUBLIC void TrimPointsClouds(const std::vector<std::string> &filenames, std::string &format);
+
+  // Point cloud registration using Go-ICP
+  // filenames[0]: input filename of point cloud P
+  // filenames[1]: input filename of point cloud Q
+  // filenames[2]: output filename of transformation T, s.t. min\|P-TQ\|
+  REGPIPELINE_PUBLIC void PointCloudRegistrationUsingGoICP(const std::vector<std::string> &filenames, const std::string &format);
+
+  // Point cloud registration using our modified Scale-FGR
+  // config_filename: input filename of config xml file
+  REGPIPELINE_PUBLIC void PointCloudRegistrationUsingScaleFGR(const std::string& config_filename);
 }
 
 #endif

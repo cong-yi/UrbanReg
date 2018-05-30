@@ -3,7 +3,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-
+#include "rapidxml.hpp"
+#include "rapidxml_utils.hpp"
 #include "rply.h"
 #include <json/json.h>
 
@@ -189,7 +190,7 @@ int DataIO::write_ply(const std::string& filename, const Eigen::MatrixXd& v, con
 	return EXIT_SUCCESS;
 }
 
-DATAIO_PUBLIC int DataIO::load_gps(const std::string &filename, Eigen::MatrixXd &local)
+int DataIO::load_gps(const std::string &filename, Eigen::MatrixXd &local)
 {
   std::ifstream ifs(filename);
   if (!ifs.good()) return EXIT_FAILURE;
@@ -202,4 +203,41 @@ DATAIO_PUBLIC int DataIO::load_gps(const std::string &filename, Eigen::MatrixXd 
   
 
   return EXIT_SUCCESS;
+}
+
+int DataIO::read_fgr_config(const std::string& filename, std::vector<std::string>& pointcloud_filenames, std::string& feature_type, std::vector<std::string>& feature_filenames, std::string& correspondences_filename, int& downsampling_num, int& pca_component_num)
+{
+	rapidxml::file<char>* xml_file = nullptr;
+	try { xml_file = new rapidxml::file<char>(filename.c_str()); }
+	catch (const std::exception& e)
+	{
+		std::cout << e.what() << std::endl;
+		return false;
+	}
+	rapidxml::xml_document<> doc;
+	doc.parse<0>(xml_file->data());
+
+	rapidxml::xml_node<>* pc_node = doc.first_node("point_cloud");
+	rapidxml::xml_node<>* pc_path_node = pc_node->first_node("filename");
+	for (pointcloud_filenames.clear(); pc_path_node; pc_path_node = pc_path_node->next_sibling())
+	{
+		pointcloud_filenames.emplace_back(pc_path_node->value());
+	}
+
+	rapidxml::xml_node<>* feature_node = doc.first_node("feature");
+	feature_type = feature_node->first_attribute("feature_type")->value();
+	rapidxml::xml_node<>* features_path_node = feature_node->first_node("filename");
+	for(feature_filenames.clear(); features_path_node; features_path_node = features_path_node->next_sibling())
+	{
+		feature_filenames.emplace_back(features_path_node->value());
+	}
+	rapidxml::xml_node<>* corres_node = doc.first_node("correspondences");
+	rapidxml::xml_node<>* corres_path_node = corres_node->first_node("filename");
+	correspondences_filename = corres_path_node->value();
+	rapidxml::xml_node<>* parameters_node = doc.first_node("parameters");
+	downsampling_num = std::stoi(parameters_node->first_attribute("downsampling_num")->value());
+	pca_component_num = std::stoi(parameters_node->first_attribute("pca_component_num")->value());
+
+	doc.clear();
+	return EXIT_SUCCESS;
 }

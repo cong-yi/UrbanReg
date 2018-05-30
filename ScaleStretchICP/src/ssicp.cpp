@@ -195,7 +195,7 @@ SSICP_PUBLIC bool SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eige
 
   // update s
   double num = (Z_tilde.array() * (X_tilde * R.transpose()).array()).sum();
-  double den = (X_tilde.array() * X_tilde.array()).sum();
+  double den = X_tilde.squaredNorm();
   s = num / den;
   if (s < a) s = a;
   if (s > b) s = b;
@@ -204,12 +204,12 @@ SSICP_PUBLIC bool SSICP::FindTransformation(const Eigen::MatrixXd &X, const Eige
 }
 
 SSICP_PUBLIC double SSICP::ComputeError(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Z, const double &s,
-  const Eigen::Matrix3d &R, const Eigen::RowVector3d &T)
+	const Eigen::Matrix3d &R, const Eigen::RowVector3d &T)
 {
-  Eigen::MatrixXd E = s * X * R.transpose() - Z;
-  E.rowwise() += T;
-  double e = E.cwiseProduct(E).sum();
-  return e;
+	Eigen::MatrixXd E = s * X * R.transpose() - Z;
+	E.rowwise() += T;
+	double e = E.squaredNorm();
+	return e;
 }
 
 SSICP_PUBLIC void SSICP::OutputParameters(const double &s, const double &a, const double &b, const Eigen::MatrixXd &R,

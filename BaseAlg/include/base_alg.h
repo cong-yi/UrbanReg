@@ -9,6 +9,7 @@ namespace BaseAlg
 	BASEALG_PUBLIC Eigen::Matrix4d normalize(const Eigen::VectorXd& min_corner, const Eigen::VectorXd& max_corner, Eigen::MatrixXd& v);
 	//return the largest ev_num eigen values and corresponding eigen vectors (each column in matrix) of data_mat
 	BASEALG_PUBLIC int pca(const Eigen::MatrixXd& data_mat, int ev_num, Eigen::VectorXd& eigen_values, Eigen::MatrixXd& eigen_vectors);
+	BASEALG_PUBLIC double rmse(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2);
 }
 
 #endif

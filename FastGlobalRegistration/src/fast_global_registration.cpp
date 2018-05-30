@@ -5,6 +5,7 @@
 #include <pcl/sample_consensus/sac_model_registration.h>
 #include <igl/slice.h>
 #include <pcl/sample_consensus/ransac.h>
+#include <igl/writeDMAT.h>
 
 #define DIV_FACTOR			1.4		// Division factor used for graduated non-convexity
 #define USE_ABSOLUTE_SCALE	0		// Measure distance in absolute scale (1) or in scale relative to the diameter of the model (0)
@@ -12,6 +13,7 @@
 #define TUPLE_SCALE			0.95	// Similarity measure used for tuples of feature points.
 #define TUPLE_MAX_CNT		1000	// Maximum tuple numbers.
 #define SHOW_DEBUG_INFO
+#define TUPLE_SIMILAR_CRITERIA
 //#define USE_RANSAC
 
 void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
@@ -246,7 +248,7 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
       float lj0 = (ptj0 - ptj1).norm();
       float lj1 = (ptj1 - ptj2).norm();
       float lj2 = (ptj2 - ptj0).norm();
-
+#ifndef TUPLE_SIMILAR_CRITERIA
       if ((li0 * scale < lj0) && (lj0 < li0 / scale) &&
         (li1 * scale < lj1) && (lj1 < li1 / scale) &&
         (li2 * scale < lj2) && (lj2 < li2 / scale))
@@ -256,7 +258,20 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
         corres_tuple.push_back(std::pair<int, int>(idi2, idj2));
         cnt++;
       }
-
+#else
+	  float k0 = li0 / lj0;
+	  float k1 = li1 / lj1;
+	  float k2 = li2 / lj2;
+	  if ((k0 * k0 / (k1*k2) > scale) && (k1*k2 / (k0*k0) > scale) &&
+		  (k1 * k1 / (k0*k2) > scale) && (k0*k2 / (k1*k1) > scale) &&
+		  (k2 * k2 / (k1*k0) > scale) && (k1*k0 / (k2*k2) > scale))
+	  {
+		  corres_tuple.push_back(std::pair<int, int>(idi0, idj0));
+		  corres_tuple.push_back(std::pair<int, int>(idi1, idj1));
+		  corres_tuple.push_back(std::pair<int, int>(idi2, idj2));
+		  cnt++;
+	  }
+#endif
       if (cnt >= TUPLE_MAX_CNT)
         break;
     }
@@ -306,22 +321,12 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
 
     Eigen::Matrix4f delta = update_ssicp(v_1, pcj_copy, corres, par);
 	//Eigen::Matrix4f delta = update_fgr(v_1, pcj_copy, corres, par);
-	  //here is a trick to combine two different optimization methods
-	  //if(delta.determinant() < 0.5)
-	  //{
-		 // std::cout << "alternative computation" << std::endl;
-		 // delta = update_fgr(v_1, pcj_copy, corres, par);
-	  //}
 
     trans = delta * trans.eval();
 
     // transform point clouds
-    Eigen::Matrix3f R = delta.block<3, 3>(0, 0);
-    Eigen::Vector3f t = delta.block<3, 1>(0, 3);
-    for (int cnt = 0; cnt < pcj_copy.rows(); cnt++)
-      pcj_copy.row(cnt) = R * pcj_copy.row(cnt).eval().transpose() + t;
+	pcj_copy = (pcj_copy.rowwise().homogeneous() * delta.transpose()).leftCols(3).eval();
   }
-
   trans_mat = trans.cast<double>();
   return par;
 }
@@ -538,7 +543,7 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
 	Eigen::Matrix3d R = FastGlobalRegistration::compute_r(Z, X, mu);
 
 	double num = (Z.array() * (X * R.transpose()).array()).sum();
-	double den = (X.array() * X.array()).sum();
+	double den = X.squaredNorm();
 	double s = num / den;
 	Eigen::RowVector3d T = sum_l_p / sum_l - s * sum_l_q / sum_l * (R.transpose());
 

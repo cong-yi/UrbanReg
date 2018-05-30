@@ -1,0 +1,12 @@
+<point_cloud>
+	<filename>out_e44_vn_trimmed.ply</filename>
+	<filename>out_e55_vn_trimmed.ply</filename>
+</point_cloud>
+<feature feature_type="shot">
+	<filename></filename>
+	<filename></filename>
+</feature>
+<correspondences>
+	<filename></filename>
+</correspondences>
+<parameters downsampling_num="100000" pca_component_num="30"/>

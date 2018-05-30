@@ -1,7 +1,7 @@
 #include "goicp.h"
 #include <jly_goicp.h>
 
-void GOICP::goicp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::MatrixXd& aligned_v_2)
+Eigen::Matrix4d GOICP::goicp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::MatrixXd& aligned_v_2)
 {
 	clock_t  clockBegin, clockEnd;
 	int NdDownsampled = 0;
@@ -28,13 +28,13 @@ void GOICP::goicp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen:
 	goicp.MSEThresh = 0.001;
 	// Smallest rotation value along dimension X of rotation cube(radians)
 	//goicp.initNodeRot.a = -3.1416;
-	goicp.initNodeRot.a = -0.31416;
+	goicp.initNodeRot.a = -0.62832;// -0.31416;
 	// Smallest rotation value along dimension Y of rotation cube(radians)
-	goicp.initNodeRot.b = -0.31416;
+	goicp.initNodeRot.b = -0.62832;// -0.31416;
 	// Smallest rotation value along dimension Z of rotation cube(radians)
-	goicp.initNodeRot.c = -0.31416;
+	goicp.initNodeRot.c = -0.62832;// -0.31416;
 	// Side length of each dimension of rotation cube(radians)
-	goicp.initNodeRot.w = 0.62832;
+	goicp.initNodeRot.w = 0.62832*2;
 	// Smallest translation value along dimension X of translation cube
 	goicp.initNodeTrans.x = -0.3;
 	// Smallest translation value along dimension Y of translation cube
@@ -101,18 +101,9 @@ void GOICP::goicp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen:
 	}
 	affine_mat(3, 3) = 1;
 
-	std::cout << affine_mat << std::endl;
-
-	Eigen::Affine3d affine_trans(affine_mat);
-	Eigen::MatrixXd output_tmp;
-	output_tmp.resize(v_2.rows(), 3);
-	for (int i = 0; i < output_tmp.rows(); ++i)
-	{
-		Eigen::Vector3d tmp_v = v_2.row(i).transpose();
-		output_tmp.row(i) = (affine_trans * tmp_v).transpose();
-	}
-	aligned_v_2 = output_tmp;
+	aligned_v_2 = (v_2.rowwise().homogeneous() * affine_mat.transpose()).leftCols(3);
 
 	delete(pModel);
 	delete(pData);
+	return affine_mat;
 }

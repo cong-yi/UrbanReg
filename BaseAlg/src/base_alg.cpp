@@ -115,3 +115,8 @@ int BaseAlg::pca(const Eigen::MatrixXd& data_mat, int ev_num, Eigen::VectorXd& e
 	}
 	return eigs.info();
 }
+
+double BaseAlg::rmse(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2)
+{
+	return (v_1 - v_2).norm() / v_1.rows();
+}

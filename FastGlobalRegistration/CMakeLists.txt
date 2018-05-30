@@ -19,6 +19,6 @@ set(FGR_SRC_FILES
 
 include_directories("${FGR_DIR}/include;${PROJECT_SOURCE_DIR}")
 add_library(FastGlobalRegistration SHARED ${FGR_INC_FILES} ${FGR_SRC_FILES})
-target_link_libraries(FastGlobalRegistration PUBLIC ${FLANN_LIBRARIES} SSICP ${PCL_SAMPLE_CONSENSUS_LIBRARIES} )
+target_link_libraries(FastGlobalRegistration PUBLIC ${FLANN_LIBRARIES} SSICP ${PCL_SAMPLE_CONSENSUS_LIBRARIES} BaseAlg)
 add_definitions(-DFGR_EXPORT)
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
