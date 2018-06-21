@@ -10,6 +10,8 @@ namespace BaseAlg
 	//return the largest ev_num eigen values and corresponding eigen vectors (each column in matrix) of data_mat
 	BASEALG_PUBLIC int pca(const Eigen::MatrixXd& data_mat, int ev_num, Eigen::VectorXd& eigen_values, Eigen::MatrixXd& eigen_vectors);
 	BASEALG_PUBLIC double rmse(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2);
+	//return the index of the nearest neighbour of each point in v_2 within the point cloud v_1
+	BASEALG_PUBLIC Eigen::VectorXi find_nearest_neighbour(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::VectorXd& distances);
 }
 
 #endif

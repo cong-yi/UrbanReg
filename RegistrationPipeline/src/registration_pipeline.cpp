@@ -15,6 +15,7 @@
 #include <igl/jet.h>
 #include <igl/readDMAT.h>
 #include <igl/slice_mask.h>
+#include <random>
 
 REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::string> &filenames, std::string &format)
 {
@@ -104,15 +105,23 @@ REGPIPELINE_PUBLIC void RegPipeline::TrimPointsClouds(const std::vector<std::str
 	}
 }
 
-void RegPipeline::PointCloudRegistrationUsingGoICP(const std::vector<std::string> &filenames, const std::string &format)
+void RegPipeline::PointCloudRegistrationUsingGoICP(const std::string& config_filename)
 {
-	if (filenames.size() < 3 || (format != "ply" && format != "PLY")) return;
+	std::string feature_type;
+	std::vector<std::string> pointcloud_filenames;
+	std::vector<std::string> feature_filenames;
+	std::string correspondences_filename;
+	int downsampling_num;
+	int pca_component_num;
+
+	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num);
+
 	Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2;
-	if (format == "PLY" || format == "ply")
-	{
-		DataIO::read_ply(filenames[0], v_1, vc_1, vn_1);
-		DataIO::read_ply(filenames[1], v_2, vc_2, vn_2);
-	}
+
+	DataIO::read_ply(pointcloud_filenames[0], v_1, vc_1, vn_1);
+	DataIO::read_ply(pointcloud_filenames[1], v_2, vc_2, vn_2);
+
+	v_2 = v_2 * 1.2;
 
 	Eigen::MatrixXd v(v_1.rows() + v_2.rows(), 3);
 	v.topRows(v_1.rows()) = v_1;
@@ -124,8 +133,11 @@ void RegPipeline::PointCloudRegistrationUsingGoICP(const std::vector<std::string
 
 	Eigen::MatrixXd aligned_v_2;
 	Eigen::Matrix4d trans_mat = GOICP::goicp(v_1, v_2, aligned_v_2);
-	trans_mat = normalization_trans_mat.inverse().eval() * trans_mat.eval() * normalization_trans_mat.eval();
-	igl::writeDMAT(filenames[2], trans_mat);
+	Eigen::Matrix4d ssicp_trans = SSICP::GetOptimalTrans(aligned_v_2, v_1, 1e-1, 1e-3);//trim_thre should be 1e-2
+
+	//aligned_v_2 = (aligned_v_2.rowwise().homogeneous() * ssicp_trans.transpose()).eval().leftCols(3);
+	trans_mat = normalization_trans_mat.inverse().eval() * ssicp_trans.eval() * trans_mat.eval() * normalization_trans_mat.eval();
+	igl::writeDMAT("affine_matrix.dmat", trans_mat);
 	return;
 }
 
@@ -140,26 +152,24 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 
 	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num);
 
-	clock_t begin = clock();
 	Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2;
-	
+
 	DataIO::read_ply(pointcloud_filenames[0], v_1, vc_1, vn_1);
 	DataIO::read_ply(pointcloud_filenames[1], v_2, vc_2, vn_2);
 
-	//v_1 *= 0.7;
+	Eigen::MatrixXd aligned_v2;
+	Eigen::MatrixXd aligned_vn_2;
 
-	//Eigen::Matrix4d gt_trans_mat;
-	//gt_trans_mat <<
-	//	0.3396880587, 0.4689553595, -0.8152870007, -0.0000000000,
-	//	-0.7223851455, 0.6851892080, 0.0931421004, -0.0000000000,
-	//	0.6023053415, 0.5573119594, 0.5715169775, -0.0000000000,
-	//	0.0000000000, 0.0000000000, 0.0000000000, 1.0000000000;
+	Eigen::MatrixXd affine_matrix(4, 4);
+
+	clock_t begin = clock();
 
 	Eigen::MatrixXd v(v_1.rows() + v_2.rows(), 3);
 	v.topRows(v_1.rows()) = v_1;
 	v.bottomRows(v_2.rows()) = v_2;
-
-	Eigen::Matrix4d normalization_trans_mat = BaseAlg::normalize(Eigen::Vector3d(-1, -1, -1), Eigen::Vector3d(1, 1, 1), v);
+	Eigen::Vector3d min_corner = Eigen::Vector3d(-1, -1, -1);
+	Eigen::Vector3d max_corner = Eigen::Vector3d(1, 1, 1);
+	Eigen::Matrix4d normalization_trans_mat = BaseAlg::normalize(min_corner, max_corner, v);
 
 	v_1 = v.topRows(v_1.rows());
 	v_2 = v.bottomRows(v_2.rows());
@@ -185,7 +195,7 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 	std::vector<std::pair<int, int> > corres;
 	if (correspondences_filename == "")
 	{
-		if(feature_filenames[0] == "" || feature_filenames[1] == "")
+		if (feature_filenames[0] == "" || feature_filenames[1] == "")
 		{
 			if (feature_type == "fpfh" || feature_type == "FPFH")
 			{
@@ -224,7 +234,7 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 
 		filtered_features.topRows(num_1) = igl::slice_mask(feature_1, feature_1_mask, 1);
 		filtered_features.bottomRows(num_2) = igl::slice_mask(feature_2, feature_2_mask, 1);
-		if(pca_component_num > 0)
+		if (pca_component_num > 0)
 		{
 			std::cout << "start pca computation" << std::endl;
 
@@ -295,48 +305,50 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 			corres[i] = std::pair<int, int>(corres_mat(i, 0), corres_mat(i, 1));
 		}
 	}
-
+	std::cout << (clock() - begin) / (double)CLOCKS_PER_SEC << "s" << std::endl;
+	begin = clock();
 	Eigen::Matrix4d trans_mat;
 	FastGlobalRegistration::optimize_pairwise(true, 128, downsampled_v1, downsampled_v2, corres, trans_mat);
+	std::cout << "FGR: " << (clock() - begin) / (double)CLOCKS_PER_SEC << "s" << std::endl;
 
 	double s = std::pow(trans_mat.determinant(), 1.0 / 3);
 	std::cout << trans_mat << std::endl;
 	std::cout << s << std::endl;
 
-
-	Eigen::MatrixXd aligned_v2 = (v_2.rowwise().homogeneous() * trans_mat.transpose()).eval().leftCols(3);
-	Eigen::MatrixXd aligned_vn_2 = vn_2 * trans_mat.block<3, 3>(0, 0).transpose().eval();
+	begin = clock();
+	aligned_v2 = (v_2.rowwise().homogeneous() * trans_mat.transpose()).eval().leftCols(3);
+	aligned_vn_2 = vn_2 * trans_mat.block<3, 3>(0, 0).transpose();
 
 	Eigen::Matrix4d ssicp_trans = SSICP::GetOptimalTrans(aligned_v2, v_1, 1e-2, 1e-3);
 
+	std::cout << "SSICP: " << (clock() - begin) / (double)CLOCKS_PER_SEC << "s" << std::endl;
 	aligned_v2 = (aligned_v2.rowwise().homogeneous() * ssicp_trans.transpose()).eval().leftCols(3);
 
-	Eigen::Matrix4d final_trans = normalization_trans_mat.inverse().eval() * ssicp_trans * trans_mat * normalization_trans_mat.eval();
+	affine_matrix = normalization_trans_mat.inverse().eval() * ssicp_trans * trans_mat * normalization_trans_mat.eval();
 
-	std::cout << final_trans << std::endl;
-	s = std::pow(final_trans.determinant(), 1.0 / 3);
+	std::cout << affine_matrix << std::endl;
+	s = std::pow(affine_matrix.determinant(), 1.0 / 3);
 	std::cout << "scaling factor: " << s << std::endl;
 
-	igl::writeDMAT("affine_trans.dmat", final_trans);
+	igl::writeDMAT("affine_matrix.dmat", affine_matrix);
 
-	Eigen::MatrixXd corres_v_1, corres_vc_1, corres_vn_1, corres_v_2, corres_vc_2, corres_vn_2, corres_v_aligned;
-	corres_v_1 = igl::slice(downsampled_v1, corres_mat.col(0), 1);
-	corres_vc_1 = igl::slice(vc_1, corres_mat.col(0), 1);
-	corres_vn_1 = igl::slice(vn_1, corres_mat.col(0), 1);
-	corres_v_2 = igl::slice(v_2, corres_mat.col(1), 1);
-	corres_vc_2 = igl::slice(vc_2, corres_mat.col(1), 1);
-	corres_vn_2 = igl::slice(vn_2, corres_mat.col(1), 1);
-	corres_v_aligned = igl::slice(aligned_v2, corres_mat.col(1), 1);
+	//Eigen::MatrixXd corres_v_1, corres_vc_1, corres_vn_1, corres_v_2, corres_vc_2, corres_vn_2, corres_v_aligned;
+	//corres_v_1 = igl::slice(downsampled_v1, corres_mat.col(0), 1);
+	//corres_vc_1 = igl::slice(vc_1, corres_mat.col(0), 1);
+	//corres_vn_1 = igl::slice(vn_1, corres_mat.col(0), 1);
+	//corres_v_2 = igl::slice(v_2, corres_mat.col(1), 1);
+	//corres_vc_2 = igl::slice(vc_2, corres_mat.col(1), 1);
+	//corres_vn_2 = igl::slice(vn_2, corres_mat.col(1), 1);
+	//corres_v_aligned = igl::slice(aligned_v2, corres_mat.col(1), 1);
 
 	//visualize the feature correspondences
-	Eigen::MatrixXd vcolor;
-	igl::jet(corres_v_1.col(1), true, vcolor);
-	vcolor *= 255;
+	//Eigen::MatrixXd vcolor;
+	//igl::jet(corres_v_1.col(1), true, vcolor);
+	//vcolor *= 255;
 
-	std::cout << (clock() - begin) / CLOCKS_PER_SEC << "s" << std::endl;
-	DataIO::write_ply(feature_type + "_feature_1.ply", corres_v_1, vcolor, corres_vn_1);
-	DataIO::write_ply(feature_type + "_feature_2.ply", corres_v_2, vcolor, corres_vn_2);
-	DataIO::write_ply(feature_type + "_feature_3.ply", corres_v_aligned, vcolor, corres_vn_2);
+	//DataIO::write_ply(feature_type + "_feature_1.ply", corres_v_1, vcolor, corres_vn_1);
+	//DataIO::write_ply(feature_type + "_feature_2.ply", corres_v_2, vcolor, corres_vn_2);
+	//DataIO::write_ply(feature_type + "_feature_3.ply", corres_v_aligned, vcolor, corres_vn_2);
 
 	DataIO::write_ply(feature_type + "_fgr_1.ply", v_1, vc_1, vn_1);
 	DataIO::write_ply(feature_type + "_fgr_2.ply", v_2, vc_2, vn_2);

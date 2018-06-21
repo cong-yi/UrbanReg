@@ -1,6 +1,7 @@
 #include "base_alg.h"
 #include <pcl/registration/icp.h>
 #include <SymEigsSolver.h>
+#include <flann/flann.hpp>
 
 void BaseAlg::icp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::MatrixXd& aligned_v_2)
 {
@@ -118,5 +119,29 @@ int BaseAlg::pca(const Eigen::MatrixXd& data_mat, int ev_num, Eigen::VectorXd& e
 
 double BaseAlg::rmse(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2)
 {
-	return (v_1 - v_2).norm() / v_1.rows();
+	return std::sqrt((v_1 - v_2).squaredNorm() / v_1.rows());
+}
+
+Eigen::VectorXi BaseAlg::find_nearest_neighbour(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::VectorXd& distances)
+{
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> rowmajor_v_1(v_1);
+
+	flann::Matrix<double> dataset(static_cast<double*>(rowmajor_v_1.data()), v_1.rows(), v_1.cols());
+	//std::cout << rowmajor_v_1 - v_1 << std::endl;
+	// construct an randomized kd-tree index using 4 kd-trees
+	flann::Index<flann::L2<double> > index(dataset, flann::KDTreeIndexParams(4));
+	index.buildIndex();
+
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> rowmajor_v_2(v_2);
+	flann::Matrix<double> query(static_cast<double*>(rowmajor_v_2.data()), v_2.rows(), v_2.cols());
+
+	int nn = 1;
+	Eigen::VectorXi ids(v_2.rows());
+	flann::Matrix<int> indices(static_cast<int*>(ids.data()), query.rows, nn);
+	distances.resize(v_2.rows());
+	flann::Matrix<double> dists(static_cast<double*>(distances.data()), query.rows, nn);
+
+	// do a knn search, using 128 checks
+	index.knnSearch(query, indices, dists, nn, flann::SearchParams(128));
+	return ids;
 }

@@ -545,6 +545,10 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
 	double num = (Z.array() * (X * R.transpose()).array()).sum();
 	double den = X.squaredNorm();
 	double s = num / den;
+	if(s < 0)
+	{
+		s = 1;
+	}
 	Eigen::RowVector3d T = sum_l_p / sum_l - s * sum_l_q / sum_l * (R.transpose());
 
   Eigen::Matrix4d trans;

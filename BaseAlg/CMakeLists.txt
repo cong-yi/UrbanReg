@@ -7,6 +7,12 @@ set(BASEALG_SRC_FILES
 	src/base_alg.cpp
 	)
 
+if(FLANN_FOUND)
+	include_directories(${FLANN_INCLUDE_DIRS})
+else()
+	message(STATUS "NOTICE: FLANN is not found.") 
+endif()
+
 find_package(PCL 1.3 REQUIRED COMPONENTS common io features registration)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
@@ -15,5 +21,5 @@ set(SPECTRA_DIR ${URBANREG_EXTERNAL}/spectra)
 
 include_directories("${BASEALG_DIR}/include" "${SPECTRA_DIR}/include")
 add_library(BaseAlg SHARED ${BASEALG_INC_FILES} ${BASEALG_SRC_FILES})
-target_link_libraries(BaseAlg PUBLIC ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} ${PCL_FEATURES_LIBRARIES} ${PCL_REGISTRATION_LIBRARIES})
+target_link_libraries(BaseAlg PUBLIC ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} ${PCL_FEATURES_LIBRARIES} ${PCL_REGISTRATION_LIBRARIES} ${FLANN_LIBRARIES})
 add_definitions(-DBASEALG_EXPORT)
