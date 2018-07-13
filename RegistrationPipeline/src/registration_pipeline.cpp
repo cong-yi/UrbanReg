@@ -182,12 +182,24 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 	{
 		need_downsampling = true;
 	}
+	Eigen::VectorXi downsampled_ids_1;
+	Eigen::VectorXi downsampled_ids_2;
 	if (need_downsampling)
 	{
-		downsampled_v1.conservativeResize(downsampling_num, 3);
-		downsampled_v2.conservativeResize(downsampling_num, 3);
-		downsampled_vn1.conservativeResize(downsampling_num, 3);
-		downsampled_vn2.conservativeResize(downsampling_num, 3);
+		downsampled_ids_1 = BaseAlg::downsampling(v_1.rows(), downsampling_num);
+		downsampled_ids_2 = BaseAlg::downsampling(v_2.rows(), downsampling_num);
+	}
+
+	if (need_downsampling)
+	{
+		downsampled_v1 = igl::slice(v_1, downsampled_ids_1, 1);
+		downsampled_v2 = igl::slice(v_2, downsampled_ids_2, 1);
+		downsampled_vn1 = igl::slice(vn_1, downsampled_ids_1, 1);
+		downsampled_vn2 = igl::slice(vn_2, downsampled_ids_2, 1);
+		//downsampled_v1.conservativeResize(downsampling_num, 3);
+		//downsampled_v2.conservativeResize(downsampling_num, 3);
+		//downsampled_vn1.conservativeResize(downsampling_num, 3);
+		//downsampled_vn2.conservativeResize(downsampling_num, 3);
 	}
 
 	Eigen::MatrixXd feature_1, feature_2;
@@ -204,11 +216,14 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 			}
 			else if (feature_type == "shot" || feature_type == "SHOT")
 			{
+				std::cout << "compute shot..." << std::endl;
 				Eigen::MatrixXd downsampled_vc1 = vc_1, downsampled_vc2 = vc_2;
 				if (need_downsampling)
 				{
-					downsampled_vc1.conservativeResize(downsampling_num, 3);
-					downsampled_vc2.conservativeResize(downsampling_num, 3);
+					downsampled_vc1 = igl::slice(vc_1, downsampled_ids_1, 1);
+					downsampled_vc2 = igl::slice(vc_2, downsampled_ids_2, 1);
+					//downsampled_vc1.conservativeResize(downsampling_num, 3);
+					//downsampled_vc2.conservativeResize(downsampling_num, 3);
 				}
 				FeatureAlg::compute_shot(downsampled_v1, v_1, vn_1, downsampled_vc1, vc_1, feature_1);
 				FeatureAlg::compute_shot(downsampled_v2, v_2, vn_2, downsampled_vc2, vc_2, feature_2);

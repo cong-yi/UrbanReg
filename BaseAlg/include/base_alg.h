@@ -12,6 +12,8 @@ namespace BaseAlg
 	BASEALG_PUBLIC double rmse(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2);
 	//return the index of the nearest neighbour of each point in v_2 within the point cloud v_1
 	BASEALG_PUBLIC Eigen::VectorXi find_nearest_neighbour(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::VectorXd& distances);
+	//return the sampled indices for slicing
+	BASEALG_PUBLIC Eigen::VectorXi downsampling(int total_num, int downsampling_num);
 }
 
 #endif

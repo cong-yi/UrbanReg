@@ -2,6 +2,7 @@
 #include <pcl/registration/icp.h>
 #include <SymEigsSolver.h>
 #include <flann/flann.hpp>
+#include <random>
 
 void BaseAlg::icp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::MatrixXd& aligned_v_2)
 {
@@ -81,7 +82,7 @@ Eigen::Matrix4d BaseAlg::normalize(const Eigen::VectorXd& min_corner, const Eige
 
 	Eigen::Matrix4d trans_mat;
 	trans_mat.setZero();
-	for(int i = 0; i < 3; ++i)
+	for (int i = 0; i < 3; ++i)
 	{
 		trans_mat(i, i) = scale_ratio;
 		trans_mat(i, 3) = trans(i) - scale_ratio * bbox_center(i);
@@ -144,4 +145,30 @@ Eigen::VectorXi BaseAlg::find_nearest_neighbour(const Eigen::MatrixXd& v_1, cons
 	// do a knn search, using 128 checks
 	index.knnSearch(query, indices, dists, nn, flann::SearchParams(128));
 	return ids;
+}
+
+Eigen::VectorXi BaseAlg::downsampling(int total_num, int downsampling_num)
+{
+	std::random_device rd;
+	Eigen::VectorXi ids = Eigen::VectorXi::LinSpaced(total_num, 0, total_num - 1);
+	if(total_num <= downsampling_num)
+	{
+		return ids;
+	}
+	std::set<int> id_set;
+	for(int i = 0; i < downsampling_num; ++i)
+	{
+		std::uniform_int_distribution<> dist(0, total_num - 1 - i);
+		int row_id = dist(rd);
+		id_set.insert(ids(row_id));
+		std::swap(*(ids.data() + row_id), *(ids.data() + total_num - 1 - i));
+	}
+	Eigen::VectorXi downsampled_ids(downsampling_num);
+	int counter = 0;
+	for (const auto& ele : id_set)
+	{
+		downsampled_ids(counter) = ele;
+		++counter;
+	}
+	return downsampled_ids;
 }
