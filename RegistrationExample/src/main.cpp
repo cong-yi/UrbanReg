@@ -9,6 +9,7 @@
 #include "FastGlobalRegistration/include/fast_global_registration.h"
 #include "igl/writeDMAT.h"
 #include "igl/readDMAT.h"
+#include "igl/readOBJ.h"
 #include "igl/slice.h"
 #include "igl/jet.h"
 #include "GoICP/include/goicp.h"
@@ -136,31 +137,61 @@ void convert_trans_to_rmse(const std::string& point_cloud_a, const std::string& 
 
 void main()
 {
-	//Eigen::MatrixXd v, vc, vn;
-	//DataIO::read_ply("E:\\Data\\e9\\scene_dense.ply", v, vc, vn);
-	//std::cout << v.rows() << " " << v.cols() << std::endl;
+	//Eigen::MatrixXd v1, vc1, vn1;
+	//Eigen::MatrixXi f1;
+	//DataIO::read_ply("E:\\Models\\cloud_and_poses2.ply", v1, vc1, vn1);
+	//Eigen::Matrix4d gt_trans_mat;
+	//gt_trans_mat <<
+	//	1.356538418140138, -0.074346534882401, 0.061055720092299544, -0.11025508026773478,
+	//	0.07333601385607247, 1.3577557494068475, 0.023934120403920928, -2.587773141743163,
+	//	-0.06226585964002496, -0.02058168600448811, 1.3583633700227857, 1.256938874536025,
+	//	0.0, 0.0, 0.0, 1.0;
+	//	//-1.1269964793895708, 0.04269661470689909, -0.019881248254682987, 0.013554839733725007,
+	//	//-0.047093043829193895, -1.0143285310518328, 0.4911814387914244, -0.8880703493137462,
+	//	//0.0007142566033271028, 0.49158311574227515, 1.0152265065741248, 0.44941749834308586,
+	//	//0.0, 0.0, 0.0, 1.0;
+	//std::cout << gt_trans_mat.determinant() << std::endl;
+	//
+	//std::cout<< std::pow(abs(gt_trans_mat.determinant()), 1 / 3.0) <<std::endl;
+	////system("pause");
+	//	///////////////1
+	//	//-0.265451995651203, 0.07511910571368165, 0.18013673235734284, 0.0009126750199021233,
+	//	//-0.010136471391022998, 0.2983812102152643, -0.13936566909043147, 0.2511295889132222, 
+	//	//0.19490863073589945, 0.11782469066397497, 0.23808580872745405, 0.2785980678803347,
+	//	//0.0, 0.0, 0.0, 1.0;
+	//v1 = (v1.eval().rowwise().homogeneous() * gt_trans_mat.transpose()).leftCols(3);
 
-	//Eigen::MatrixXd down_sampled_v, down_sampled_vc, down_sample_vn;
-	//down_sampled_v.resize(v.rows() / 100, 3);
-	//down_sampled_vc.resize(v.rows() / 100, 3);
-	//down_sample_vn.resize(v.rows() / 100, 3);
-	//std::random_device rd;
-	//std::uniform_int_distribution<> dist(0, v.rows() - 1);
-	//std::vector<char> has_sampled(v.rows(), false);
-	//for (int i = 0; i < down_sampled_v.rows(); ++i)
+	//DataIO::write_ply("E:\\Models\\cloud_and_poses2_aligned.ply", v1, vc1, vn1);
+	//system("pause");
+
+	//Eigen::MatrixXd v, vc, vn;
+	//DataIO::read_ply("E:\\Projects\\UrbanReg\\build\\bin\\Release\\lucy.ply", v, vc, vn);
+	//std::cout << v.rows() << " " << v.cols() << std::endl;
+	//for(int i = 1; i <= 10; ++i)
 	//{
-	//	int row_id = dist(rd);
-	//	while(has_sampled[row_id])
+	//	Eigen::MatrixXd down_sampled_v, down_sampled_vc, down_sample_vn;
+	//	down_sampled_v.resize(v.rows() / std::pow(2, i), 3);
+	//	down_sampled_vc.resize(v.rows() / std::pow(2, i), 3);
+	//	down_sample_vn.resize(v.rows() / std::pow(2, i), 3);
+	//	std::random_device rd;
+	//	std::uniform_int_distribution<> dist(0, v.rows() - 1);
+	//	std::vector<char> has_sampled(v.rows(), false);
+	//	for (int i = 0; i < down_sampled_v.rows(); ++i)
 	//	{
-	//		row_id = dist(rd);
-	//		printf("has sampled.\n");
+	//		int row_id = dist(rd);
+	//		while (has_sampled[row_id])
+	//		{
+	//			row_id = dist(rd);
+	//			printf("has sampled.\n");
+	//		}
+	//		has_sampled[row_id] = true;
+	//		down_sampled_v.row(i) = v.row(row_id);
+	//		down_sampled_vc.row(i) = vc.row(row_id);
+	//		down_sample_vn.row(i) = vn.row(row_id);
 	//	}
-	//	has_sampled[row_id] = true;
-	//	down_sampled_v.row(i) = v.row(row_id);
-	//	down_sampled_vc.row(i) = vc.row(row_id);
-	//	down_sample_vn.row(i) = vn.row(row_id);
+	//	DataIO::write_ply("E:\\Projects\\UrbanReg\\build\\bin\\Release\\lucy"+std::to_string(std::pow(2, i))+".ply", down_sampled_v, down_sampled_vc, down_sample_vn);
 	//}
-	//DataIO::write_ply("downsampled_e9.ply", down_sampled_v, down_sampled_vc, down_sample_vn);
+
 	//return;
 
 	//icp_example("E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e44_vn_trimmed.ply", "E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e55_vn_trimmed.ply");
@@ -199,7 +230,8 @@ void main()
 	//	std::cout << '\n';
 	//}
 
-	RegPipeline::PointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+	//RegPipeline::PointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+	RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR("fgr_test.xml");
 	////RegPipeline::PointCloudRegistrationUsingGoICP("fgr_test.xml");
 
 	//convert_trans_to_rmse("E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_10_rot_05\\Depth_0000.ply", "E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_10_rot_05\\Depth_0001.ply", "affine_matrix.dmat", "scales.dmat", "rmse.dmat");

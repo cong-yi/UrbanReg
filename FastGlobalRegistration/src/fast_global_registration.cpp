@@ -215,7 +215,8 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
     int ncorr = corres.size();
     int number_of_trial = ncorr * 100;
     std::vector<std::pair<int, int>> corres_tuple;
-
+	std::vector<double> ratios;
+	ratios.reserve(TUPLE_MAX_CNT);
     int cnt = 0;
     int i;
     for (i = 0; i < number_of_trial; i++)
@@ -266,9 +267,10 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 		  (k1 * k1 / (k0*k2) > scale) && (k0*k2 / (k1*k1) > scale) &&
 		  (k2 * k2 / (k1*k0) > scale) && (k1*k0 / (k2*k2) > scale))
 	  {
-		  corres_tuple.push_back(std::pair<int, int>(idi0, idj0));
-		  corres_tuple.push_back(std::pair<int, int>(idi1, idj1));
-		  corres_tuple.push_back(std::pair<int, int>(idi2, idj2));
+		  corres_tuple.emplace_back(idi0, idj0);
+		  corres_tuple.emplace_back(idi1, idj1);
+		  corres_tuple.emplace_back(idi2, idj2);
+		  ratios.emplace_back(std::log(std::pow(k0 * k1 * k2, 1.0/3)));
 		  cnt++;
 	  }
 #endif
@@ -278,9 +280,57 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 
     printf("%d tuples (%d trial, %d actual).\n", cnt, number_of_trial, i);
     corres.clear();
+	//Eigen::Map<Eigen::VectorXd> ratio_vec(&ratios[0], ratios.size());
+	//igl::writeDMAT("ratios.dmat", ratio_vec);
 
-    for (int i = 0; i < corres_tuple.size(); ++i)
-      corres.push_back(std::pair<int, int>(corres_tuple[i].first, corres_tuple[i].second));
+	const double sum = std::accumulate(ratios.begin(), ratios.end(), 0.0);
+	const double mean = sum / ratios.size();
+
+	std::vector<double> diff(ratios.size());
+	std::transform(ratios.begin(), ratios.end(), diff.begin(), [mean](double x) { return x - mean; });
+	const double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+	const double stdev = std::sqrt(sq_sum / ratios.size());
+	std::cout << "mean: " << mean << "  ; std: " << stdev << std::endl;
+
+	//auto tmp_ratios = ratios;
+	//std::nth_element(tmp_ratios.begin(), tmp_ratios.begin() + tmp_ratios.size() / 2, tmp_ratios.end());
+	//const double median = tmp_ratios[tmp_ratios.size() / 2];
+	//std::cout << "median: " << median << std::endl;
+	std::vector<int> feature_mark_i(pointcloud[fi]->rows(), 0);
+	std::vector<int> feature_mark_j(pointcloud[fj]->rows(), 0);
+	  for(int i = 0; i < ratios.size(); ++i)
+	  {
+		  if(ratios[i] > mean - stdev && ratios[i] < mean + stdev)
+		  {
+			  corres.emplace_back(corres_tuple[i * 3].first, corres_tuple[i * 3].second);
+			  corres.emplace_back(corres_tuple[i * 3 + 1].first, corres_tuple[i * 3 + 1].second);
+			  corres.emplace_back(corres_tuple[i * 3 + 2].first, corres_tuple[i * 3 + 2].second);
+
+			  //feature_mark_i[corres_tuple[i * 3].first]++;
+			  //feature_mark_i[corres_tuple[i * 3 + 1].first]++;
+			  //feature_mark_i[corres_tuple[i * 3 + 2].first]++;
+
+			  //feature_mark_j[corres_tuple[i * 3].second]++;
+			  //feature_mark_j[corres_tuple[i * 3 + 1].second]++;
+			  //feature_mark_j[corres_tuple[i * 3 + 2].second]++;
+			  //for(int j = 0; j < 3; ++j)
+			  //{
+				 // if(feature_mark_i[corres_tuple[i * 3 + j].first] > 1 && feature_mark_j[corres_tuple[i * 3 + j].first] > 1)
+				 // {
+					//  corres.emplace_back(corres_tuple[i * 3 + j].first, corres_tuple[i * 3 + j].second);
+				 // }
+			  //}
+		  }
+	  }
+	  //for(const auto& ele : feature_mark_i)
+	  //{
+		 // if(ele > 1)
+		 // {
+			//  std::cout << ele << std::endl;
+		 // }
+	  //}
+    //for (int i = 0; i < corres_tuple.size(); ++i)
+    //  corres.push_back(std::pair<int, int>(corres_tuple[i].first, corres_tuple[i].second));
   }
 
   if (swapped)
@@ -304,9 +354,9 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
   double par = 4.0f;
 
   // make a float copy of v2.
-  Eigen::MatrixXf pcj_copy = v_2.cast<float>();
+  Eigen::MatrixXd pcj_copy = v_2;
 
-  Eigen::Matrix4f trans;
+  Eigen::Matrix4d trans;
   trans.setIdentity();
 
   for (int itr = 0; itr < num_iter; itr++)
@@ -319,7 +369,7 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
       }
     }
 
-    Eigen::Matrix4f delta = update_ssicp(v_1, pcj_copy, corres, par);
+    Eigen::Matrix4d delta = update_ssicp(v_1, pcj_copy, corres, par);
 	//Eigen::Matrix4f delta = update_fgr(v_1, pcj_copy, corres, par);
 
     trans = delta * trans.eval();
@@ -327,11 +377,11 @@ double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter,
     // transform point clouds
 	pcj_copy = (pcj_copy.rowwise().homogeneous() * delta.transpose()).leftCols(3).eval();
   }
-  trans_mat = trans.cast<double>();
+  trans_mat = trans;
   return par;
 }
 
-FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
+Eigen::Matrix4f FastGlobalRegistration::update_fgr(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
   const std::vector<std::pair<int, int>> &corres, const double mu)
 {
   const int nvariable = 6;	// 3 for rotation and 3 for translation
@@ -460,8 +510,8 @@ Eigen::Matrix3d FastGlobalRegistration::compute_r(const Eigen::MatrixXd &p_mat, 
 	return r_mat;
 }
 
-FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::MatrixXd &v_1, const Eigen::MatrixXf &v_2,
-  const std::vector<std::pair<int, int>>& corres, const double mu)
+Eigen::Matrix4d FastGlobalRegistration::update_ssicp(const Eigen::MatrixXd &v_1, const Eigen::MatrixXd &v_2,
+  const std::vector<std::pair<int, int> >& corres, const double mu)
 {
 #ifdef SHOW_DEBUG_INFO
 	double e = 0;
@@ -473,9 +523,9 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
   Eigen::MatrixXd X(corres.size(), 3), Z(corres.size(), 3);
   for (size_t i = 0; i < corres.size(); ++i)
   {
-    Eigen::Vector3f p = v_1.row(corres[i].first).transpose().cast<float>();
-    Eigen::Vector3f q = v_2.row(corres[i].second).transpose();
-    Eigen::Vector3f rpq = p - q;
+    Eigen::Vector3d p = v_1.row(corres[i].first).transpose();
+    Eigen::Vector3d q = v_2.row(corres[i].second).transpose();
+    Eigen::Vector3d rpq = p - q;
     double sqrtl = mu / (rpq.dot(rpq) + mu);
 	sqrtl_vec(i) = sqrtl;
 	double l = sqrtl * sqrtl;
@@ -486,8 +536,8 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
 	e += sqrtl * sqrtl*rpq.dot(rpq) + mu * (sqrtl - 1)*(sqrtl - 1);
 #endif
 
-    X.row(i) = sqrtl * v_2.row(corres[i].second).cast<double>();
-    Z.row(i) = sqrtl * v_1.row(corres[i].first).cast<double>();
+    X.row(i) = sqrtl * v_2.row(corres[i].second);
+    Z.row(i) = sqrtl * v_1.row(corres[i].first);
   }
   X -= (sqrtl_vec * sum_l_q / sum_l);
   Z -= (sqrtl_vec * sum_l_p / sum_l);
@@ -557,5 +607,170 @@ FGR_PUBLIC Eigen::Matrix4f FastGlobalRegistration::update_ssicp(const Eigen::Mat
   trans.block<3, 1>(0, 3) = T.transpose();
   trans(3, 3) = 1;
 
-  return trans.cast<float>();
+  return trans;
+}
+
+double FastGlobalRegistration::optimize_global(bool decrease_mu, int num_iter, std::map<int, Eigen::MatrixXd>& v_map, std::map<int, std::map<int, std::vector<std::pair<int, int> > > >& corres_map, std::map<int, Eigen::Matrix4d>& trans_mat_map)
+{
+	printf("Global pose optimization\n");
+	//if (corres.size() < 10) return -1;
+
+	double par = 4.0f;
+	// make a float copy of v2.
+	//Eigen::MatrixXf pcj_copy = v_2.cast<float>();
+	std::map<int, Eigen::MatrixXd> backup_v_map = v_map;
+	for(const auto& ele : v_map)
+	{
+		trans_mat_map[ele.first] = Eigen::Matrix4d::Identity();
+	}
+
+	for (int itr = 0; itr < num_iter; itr++)
+	{
+		// graduated non-convexity.
+		if (decrease_mu)
+		{
+			if (itr % 4 == 0 && par > MAX_CORR_DIST) {
+				par /= DIV_FACTOR;
+			}
+		}
+		int counter = 0;
+		for (const auto& outer_ele : corres_map)
+		{
+			const Eigen::MatrixXd& pointcloud_1 = v_map.find(outer_ele.first)->second;
+			Eigen::MatrixXd& trans_pointcloud_1 = backup_v_map.find(outer_ele.first)->second;
+			for (const auto& inner_ele : outer_ele.second)
+			{
+				const Eigen::MatrixXd& pointcloud_2 = v_map.find(inner_ele.first)->second;
+				Eigen::MatrixXd& trans_pointcloud_2 = backup_v_map.find(inner_ele.first)->second;
+				for (const auto& pair_ele : inner_ele.second)
+				{
+					Eigen::RowVector3d p = pointcloud_1.row(pair_ele.first);
+					Eigen::RowVector3d q = pointcloud_2.row(pair_ele.second);
+					Eigen::RowVector3d rpq = p - q;
+					double sqrtl = par / (rpq.dot(rpq) + par);
+					trans_pointcloud_1.row(pair_ele.first) = sqrtl * p;
+					trans_pointcloud_2.row(pair_ele.second) = sqrtl * q;
+				}
+			}
+		}
+
+		if(!trans_mat_map.empty())
+		{
+			for(const auto& ele : trans_mat_map)
+			{
+				backup_v_map[ele.first] = (backup_v_map[ele.first].eval().rowwise().homogeneous() * ele.second.transpose()).leftCols(3);
+			}
+			auto temp_trans_map = update_ssicp_global(backup_v_map, corres_map, par);
+			for (auto& ele : trans_mat_map)
+			{
+				ele.second = temp_trans_map[ele.first] * ele.second.eval();
+			}
+		}
+		else
+		{
+			trans_mat_map = update_ssicp_global(backup_v_map, corres_map, par);
+		}
+	}
+	return par;
+}
+
+std::map<int, Eigen::Matrix4d> FastGlobalRegistration::update_ssicp_global(std::map<int, Eigen::MatrixXd>& v_map, std::map<int, std::map<int, std::vector<std::pair<int, int> > > >& corres_map, const double mu)
+{
+	int func_num = 0;
+	for(const auto& outer_ele : corres_map)
+	{
+		for(const auto& inner_ele : outer_ele.second)
+		{
+			func_num += inner_ele.second.size();
+		}
+	}
+	std::map<int, Eigen::Matrix4d> trans_map;
+	for(const auto& ele : v_map)
+	{
+		trans_map[ele.first] = Eigen::Matrix4d::Identity();
+	}
+	Eigen::MatrixXd jacobian_mat(func_num * 3, 6 * v_map.size());
+	jacobian_mat.setZero();
+	Eigen::VectorXd residuals(func_num * 3);
+	int counter = 0;
+	for (const auto& outer_ele : corres_map)
+	{
+		const Eigen::MatrixXd& pointcloud_1 = v_map.find(outer_ele.first)->second;
+		for (const auto& inner_ele : outer_ele.second)
+		{
+			const Eigen::MatrixXd& pointcloud_2 = v_map.find(inner_ele.first)->second;
+			for(const auto& pair_ele : inner_ele.second)
+			{
+				Eigen::RowVector3d p = pointcloud_1.row(pair_ele.first);
+				Eigen::RowVector3d q = pointcloud_2.row(pair_ele.second);
+				
+				residuals(counter) = p(0) - q(0);
+				residuals(counter + 1) = p(1) - q(1);
+				residuals(counter + 2) = p(2) - q(2);
+				//x
+				jacobian_mat(counter, outer_ele.first * 6) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 1) = p(2);
+				jacobian_mat(counter, outer_ele.first * 6 + 2) = -p(1);
+				jacobian_mat(counter, outer_ele.first * 6 + 3) = 1;
+				jacobian_mat(counter, outer_ele.first * 6 + 4) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 5) = 0;
+
+				jacobian_mat(counter, inner_ele.first * 6) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 1) = -q(2);
+				jacobian_mat(counter, inner_ele.first * 6 + 2) = q(1);
+				jacobian_mat(counter, inner_ele.first * 6 + 3) = -1;
+				jacobian_mat(counter, inner_ele.first * 6 + 4) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 5) = 0;
+				++counter;
+				//y
+				jacobian_mat(counter, outer_ele.first * 6) = -p(2);
+				jacobian_mat(counter, outer_ele.first * 6 + 1) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 2) = p(0);
+				jacobian_mat(counter, outer_ele.first * 6 + 3) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 4) = 1;
+				jacobian_mat(counter, outer_ele.first * 6 + 5) = 0;
+
+				jacobian_mat(counter, inner_ele.first * 6) = q(2);
+				jacobian_mat(counter, inner_ele.first * 6 + 1) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 2) = -q(0);
+				jacobian_mat(counter, inner_ele.first * 6 + 3) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 4) = -1;
+				jacobian_mat(counter, inner_ele.first * 6 + 5) = 0;
+				++counter;
+				//z
+				jacobian_mat(counter, outer_ele.first * 6) = p(1);
+				jacobian_mat(counter, outer_ele.first * 6 + 1) = -p(0);
+				jacobian_mat(counter, outer_ele.first * 6 + 2) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 3) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 4) = 0;
+				jacobian_mat(counter, outer_ele.first * 6 + 5) = 1;
+
+				jacobian_mat(counter, inner_ele.first * 6) = -q(1);
+				jacobian_mat(counter, inner_ele.first * 6 + 1) = q(0);
+				jacobian_mat(counter, inner_ele.first * 6 + 2) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 3) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 4) = 0;
+				jacobian_mat(counter, inner_ele.first * 6 + 5) = -1;
+				++counter;
+			}
+			
+		}
+	}
+	const Eigen::MatrixXd jacobian_mat_trans = jacobian_mat.transpose();
+	Eigen::MatrixXd jtj = jacobian_mat_trans * jacobian_mat;
+	const Eigen::VectorXd jtr = jacobian_mat_trans * residuals;
+	Eigen::VectorXd result = -jtj.ldlt().solve(jtr);
+
+	for(int i = 0; i < result.rows(); ++i)
+	{
+		Eigen::Matrix4d& trans_mat = trans_map[i];
+		trans_mat.block<3, 3>(0, 0) = static_cast<Eigen::Matrix3d>(Eigen::AngleAxisd(result(i * 6 + 2), Eigen::Vector3d::UnitZ())
+			* Eigen::AngleAxisd(result(i * 6 + 1), Eigen::Vector3d::UnitY())
+			* Eigen::AngleAxisd(result(i * 6), Eigen::Vector3d::UnitX()));
+		trans_mat(0, 3) = result(i * 6 + 3);
+		trans_mat(1, 3) = result(i * 6 + 4);
+		trans_mat(2, 3) = result(i * 6 + 5);
+	}
+
+	return trans_map;
 }

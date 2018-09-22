@@ -93,7 +93,7 @@ void FeatureAlg::compute_fpfh(const Eigen::MatrixXd& v, const Eigen::MatrixXd& v
 	auto time_start = std::chrono::high_resolution_clock::now();
 	pcl::FPFHEstimationOMP<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33>::Ptr fest(new pcl::FPFHEstimationOMP<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33>());
 	pcl::PointCloud<pcl::FPFHSignature33>::Ptr object_features(new pcl::PointCloud<pcl::FPFHSignature33>());
-	double feature_radius = 0.125;
+	double feature_radius = 0.05 * (v.colwise().maxCoeff() - v.colwise().minCoeff()).norm();
 
 	fest->setRadiusSearch(feature_radius);
 	//fest->setKSearch(400);

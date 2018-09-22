@@ -1,6 +1,7 @@
 cmake_minimum_required( VERSION 3.1.2 )
 project(UrbanReg)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMake")
+message(${CMAKE_MODULE_PATH})
 set(URBANREG_EXTERNAL "${PROJECT_SOURCE_DIR}/external")
 set(VS_EXTERNAL "external")
 option(WITH_RPLY		"Use RPly"			ON)
