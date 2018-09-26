@@ -613,15 +613,15 @@ Eigen::Matrix4d FastGlobalRegistration::update_ssicp(const Eigen::MatrixXd &v_1,
 double FastGlobalRegistration::optimize_global(bool decrease_mu, int num_iter, std::map<int, Eigen::MatrixXd>& v_map, std::map<int, std::map<int, std::vector<std::pair<int, int> > > >& corres_map, std::map<int, Eigen::Matrix4d>& trans_mat_map)
 {
 	printf("Global pose optimization\n");
-	//if (corres.size() < 10) return -1;
 
 	double par = 4.0f;
-	// make a float copy of v2.
-	//Eigen::MatrixXf pcj_copy = v_2.cast<float>();
+
 	std::map<int, Eigen::MatrixXd> backup_v_map = v_map;
+	std::map<int, double> scales;
 	for(const auto& ele : v_map)
 	{
 		trans_mat_map[ele.first] = Eigen::Matrix4d::Identity();
+		scales[ele.first] = 1;
 	}
 
 	for (int itr = 0; itr < num_iter; itr++)
@@ -633,42 +633,95 @@ double FastGlobalRegistration::optimize_global(bool decrease_mu, int num_iter, s
 				par /= DIV_FACTOR;
 			}
 		}
-		int counter = 0;
-		for (const auto& outer_ele : corres_map)
-		{
-			const Eigen::MatrixXd& pointcloud_1 = v_map.find(outer_ele.first)->second;
-			Eigen::MatrixXd& trans_pointcloud_1 = backup_v_map.find(outer_ele.first)->second;
-			for (const auto& inner_ele : outer_ele.second)
-			{
-				const Eigen::MatrixXd& pointcloud_2 = v_map.find(inner_ele.first)->second;
-				Eigen::MatrixXd& trans_pointcloud_2 = backup_v_map.find(inner_ele.first)->second;
-				for (const auto& pair_ele : inner_ele.second)
-				{
-					Eigen::RowVector3d p = pointcloud_1.row(pair_ele.first);
-					Eigen::RowVector3d q = pointcloud_2.row(pair_ele.second);
-					Eigen::RowVector3d rpq = p - q;
-					double sqrtl = par / (rpq.dot(rpq) + par);
-					trans_pointcloud_1.row(pair_ele.first) = sqrtl * p;
-					trans_pointcloud_2.row(pair_ele.second) = sqrtl * q;
-				}
-			}
-		}
 
 		if(!trans_mat_map.empty())
 		{
-			for(const auto& ele : trans_mat_map)
-			{
-				backup_v_map[ele.first] = (backup_v_map[ele.first].eval().rowwise().homogeneous() * ele.second.transpose()).leftCols(3);
-			}
 			auto temp_trans_map = update_ssicp_global(backup_v_map, corres_map, par);
 			for (auto& ele : trans_mat_map)
 			{
 				ele.second = temp_trans_map[ele.first] * ele.second.eval();
+				backup_v_map[ele.first] = (v_map[ele.first].eval().rowwise().homogeneous() * ele.second.transpose()).leftCols(3);
 			}
 		}
 		else
 		{
 			trans_mat_map = update_ssicp_global(backup_v_map, corres_map, par);
+		}
+
+		if(itr < 50)
+		{
+			continue;
+		}
+
+		int func_num = 0;
+		for (const auto& outer_ele : corres_map)
+		{
+			for (const auto& inner_ele : outer_ele.second)
+			{
+				func_num += inner_ele.second.size();
+			}
+		}
+		Eigen::SparseMatrix<double> jacobian_mat(func_num * 3 + 1, v_map.size());
+		Eigen::VectorXd residuals(func_num * 3 + 1);
+
+		std::vector<Eigen::Triplet<double> > triplets;
+		triplets.reserve(func_num * 6 + 1);
+		int counter = 0;
+		for (const auto& outer_ele : corres_map)
+		{
+			const Eigen::MatrixXd& pointcloud_1 = v_map.find(outer_ele.first)->second;
+			Eigen::MatrixXd& trans_pointcloud_1 = backup_v_map.find(outer_ele.first)->second;
+			Eigen::Matrix3d rotation_1 = trans_mat_map[outer_ele.first].block<3, 3>(0, 0) / scales[outer_ele.first];
+			Eigen::MatrixXd rotated_pc1 = pointcloud_1 * rotation_1.transpose();
+			for (const auto& inner_ele : outer_ele.second)
+			{
+				const Eigen::MatrixXd& pointcloud_2 = v_map.find(inner_ele.first)->second;
+				Eigen::MatrixXd& trans_pointcloud_2 = backup_v_map.find(inner_ele.first)->second;
+
+				Eigen::Matrix3d rotation_2 = trans_mat_map[inner_ele.first].block<3, 3>(0, 0) / scales[inner_ele.first];
+				Eigen::MatrixXd rotated_pc2 = pointcloud_2 * rotation_2.transpose();
+				for (const auto& pair_ele : inner_ele.second)
+				{
+					Eigen::RowVector3d p = trans_pointcloud_1.row(pair_ele.first);
+					Eigen::RowVector3d q = trans_pointcloud_2.row(pair_ele.second);
+					Eigen::RowVector3d rpq = p - q;
+					const double sqrtl = par / (rpq.dot(rpq) + par);
+					p *= sqrtl;
+					q *= sqrtl;
+
+					residuals(counter) = p(0) - q(0);
+					residuals(counter + 1) = p(1) - q(1);
+					residuals(counter + 2) = p(2) - q(2);
+
+					triplets.emplace_back(counter, outer_ele.first, sqrtl * rotated_pc1(pair_ele.first, 0));
+					triplets.emplace_back(counter, inner_ele.first, -sqrtl * rotated_pc2(pair_ele.second, 0));
+					++counter;
+
+					triplets.emplace_back(counter, outer_ele.first, sqrtl * rotated_pc1(pair_ele.first, 1));
+					triplets.emplace_back(counter, inner_ele.first, -sqrtl * rotated_pc2(pair_ele.second, 1));
+					++counter;
+
+					triplets.emplace_back(counter, outer_ele.first, sqrtl * rotated_pc1(pair_ele.first, 2));
+					triplets.emplace_back(counter, inner_ele.first, -sqrtl * rotated_pc2(pair_ele.second, 2));
+					++counter;
+				}
+			}
+		}
+		triplets.emplace_back(counter, 0, 1e6);
+		residuals(counter) = 0;
+
+		jacobian_mat.setFromTriplets(triplets.begin(), triplets.end());
+		const Eigen::SparseMatrix<double> jacobian_mat_trans = jacobian_mat.transpose();
+		Eigen::SparseMatrix<double> jtj = jacobian_mat_trans * jacobian_mat;
+		const Eigen::VectorXd jtr = jacobian_mat_trans * residuals;
+		Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(jtj);
+		Eigen::VectorXd result = -solver.solve(jtr);
+
+		for (auto& ele : trans_mat_map)
+		{
+			ele.second.block<3, 3>(0, 0) *= 1 + result(ele.first) / scales[ele.first];
+			scales[ele.first] += result(ele.first);
+			backup_v_map[ele.first] = (v_map[ele.first].eval().rowwise().homogeneous() * ele.second.transpose()).leftCols(3);
 		}
 	}
 	return par;
@@ -684,14 +737,18 @@ std::map<int, Eigen::Matrix4d> FastGlobalRegistration::update_ssicp_global(std::
 			func_num += inner_ele.second.size();
 		}
 	}
+
 	std::map<int, Eigen::Matrix4d> trans_map;
 	for(const auto& ele : v_map)
 	{
 		trans_map[ele.first] = Eigen::Matrix4d::Identity();
 	}
-	Eigen::MatrixXd jacobian_mat(func_num * 3, 6 * v_map.size());
-	jacobian_mat.setZero();
-	Eigen::VectorXd residuals(func_num * 3);
+	//Eigen::MatrixXd jacobian_mat(func_num * 3 + 6, 6 * v_map.size());
+	std::vector<Eigen::Triplet<double> > triplets;
+	triplets.reserve(func_num * 3 * 6 + 6);
+
+	Eigen::SparseMatrix<double> jacobian_mat(func_num * 3 + 6, 6 * v_map.size());
+	Eigen::VectorXd residuals(func_num * 3 + 6);
 	int counter = 0;
 	for (const auto& outer_ele : corres_map)
 	{
@@ -703,63 +760,67 @@ std::map<int, Eigen::Matrix4d> FastGlobalRegistration::update_ssicp_global(std::
 			{
 				Eigen::RowVector3d p = pointcloud_1.row(pair_ele.first);
 				Eigen::RowVector3d q = pointcloud_2.row(pair_ele.second);
-				
+
+				Eigen::RowVector3d rpq = p - q;
+				const double sqrtl = mu / (rpq.dot(rpq) + mu);
+
+				p *= sqrtl;
+				q *= sqrtl;
+
 				residuals(counter) = p(0) - q(0);
 				residuals(counter + 1) = p(1) - q(1);
 				residuals(counter + 2) = p(2) - q(2);
 				//x
-				jacobian_mat(counter, outer_ele.first * 6) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 1) = p(2);
-				jacobian_mat(counter, outer_ele.first * 6 + 2) = -p(1);
-				jacobian_mat(counter, outer_ele.first * 6 + 3) = 1;
-				jacobian_mat(counter, outer_ele.first * 6 + 4) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 5) = 0;
-
-				jacobian_mat(counter, inner_ele.first * 6) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 1) = -q(2);
-				jacobian_mat(counter, inner_ele.first * 6 + 2) = q(1);
-				jacobian_mat(counter, inner_ele.first * 6 + 3) = -1;
-				jacobian_mat(counter, inner_ele.first * 6 + 4) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 5) = 0;
+				triplets.emplace_back(counter, outer_ele.first * 6 + 1, p(2));
+				triplets.emplace_back(counter, outer_ele.first * 6 + 2, -p(1));
+				triplets.emplace_back(counter, outer_ele.first * 6 + 3, sqrtl);
+				triplets.emplace_back(counter, inner_ele.first * 6 + 1, -q(2));
+				triplets.emplace_back(counter, inner_ele.first * 6 + 2, q(1));
+				triplets.emplace_back(counter, inner_ele.first * 6 + 3, -sqrtl);
 				++counter;
+
 				//y
-				jacobian_mat(counter, outer_ele.first * 6) = -p(2);
-				jacobian_mat(counter, outer_ele.first * 6 + 1) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 2) = p(0);
-				jacobian_mat(counter, outer_ele.first * 6 + 3) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 4) = 1;
-				jacobian_mat(counter, outer_ele.first * 6 + 5) = 0;
-
-				jacobian_mat(counter, inner_ele.first * 6) = q(2);
-				jacobian_mat(counter, inner_ele.first * 6 + 1) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 2) = -q(0);
-				jacobian_mat(counter, inner_ele.first * 6 + 3) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 4) = -1;
-				jacobian_mat(counter, inner_ele.first * 6 + 5) = 0;
+				triplets.emplace_back(counter, outer_ele.first * 6, -p(2));
+				triplets.emplace_back(counter, outer_ele.first * 6 + 2, p(0));
+				triplets.emplace_back(counter, outer_ele.first * 6 + 4, sqrtl);
+				triplets.emplace_back(counter, inner_ele.first * 6, q(2));
+				triplets.emplace_back(counter, inner_ele.first * 6 + 2, -q(0));
+				triplets.emplace_back(counter, inner_ele.first * 6 + 4, -sqrtl);
 				++counter;
-				//z
-				jacobian_mat(counter, outer_ele.first * 6) = p(1);
-				jacobian_mat(counter, outer_ele.first * 6 + 1) = -p(0);
-				jacobian_mat(counter, outer_ele.first * 6 + 2) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 3) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 4) = 0;
-				jacobian_mat(counter, outer_ele.first * 6 + 5) = 1;
 
-				jacobian_mat(counter, inner_ele.first * 6) = -q(1);
-				jacobian_mat(counter, inner_ele.first * 6 + 1) = q(0);
-				jacobian_mat(counter, inner_ele.first * 6 + 2) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 3) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 4) = 0;
-				jacobian_mat(counter, inner_ele.first * 6 + 5) = -1;
+				//z
+				triplets.emplace_back(counter, outer_ele.first * 6, p(1));
+				triplets.emplace_back(counter, outer_ele.first * 6 + 1, -p(0));
+				triplets.emplace_back(counter, outer_ele.first * 6 + 5, sqrtl);
+				triplets.emplace_back(counter, inner_ele.first * 6, -q(1));
+				triplets.emplace_back(counter, inner_ele.first * 6 + 1, q(0));
+				triplets.emplace_back(counter, inner_ele.first * 6 + 5, -sqrtl);
 				++counter;
 			}
 			
 		}
 	}
-	const Eigen::MatrixXd jacobian_mat_trans = jacobian_mat.transpose();
-	Eigen::MatrixXd jtj = jacobian_mat_trans * jacobian_mat;
+	triplets.emplace_back(counter, 0, 1e5);
+	triplets.emplace_back(counter + 1, 1, 1e5);
+	triplets.emplace_back(counter + 2, 2, 1e5);
+	triplets.emplace_back(counter + 3, 3, 1e5);
+	triplets.emplace_back(counter + 4, 4, 1e5);
+	triplets.emplace_back(counter + 5, 5, 1e5);
+
+	residuals(counter) = 0;
+	residuals(counter + 1) = 0;
+	residuals(counter + 2) = 0;
+	residuals(counter + 3) = 0;
+	residuals(counter + 4) = 0;
+	residuals(counter + 5) = 0;
+
+	jacobian_mat.setFromTriplets(triplets.begin(), triplets.end());
+	const Eigen::SparseMatrix<double> jacobian_mat_trans = jacobian_mat.transpose();
+	Eigen::SparseMatrix<double> jtj = jacobian_mat_trans * jacobian_mat;
 	const Eigen::VectorXd jtr = jacobian_mat_trans * residuals;
-	Eigen::VectorXd result = -jtj.ldlt().solve(jtr);
+
+	Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(jtj);
+	Eigen::VectorXd result = -solver.solve(jtr);
 
 	for(int i = 0; i < result.rows(); ++i)
 	{

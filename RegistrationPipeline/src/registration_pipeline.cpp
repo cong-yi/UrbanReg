@@ -446,21 +446,28 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 			downsampled_v_map[i] = igl::slice(v_map[i], downsampled_id_map[i], 1);
 			downsampled_vn_map[i] = igl::slice(vn_map[i], downsampled_id_map[i], 1);
 		}
-		features_map[i] = Eigen::MatrixXd();
-		if (feature_type == "fpfh" || feature_type == "FPFH")
+		if(feature_filenames.empty())
 		{
-			FeatureAlg::compute_fpfh(downsampled_v_map[i], downsampled_vn_map[i], features_map[i]);
-		}
-		else if (feature_type == "shot" || feature_type == "SHOT")
-		{
-			Eigen::MatrixXd downsampled_vc = vc_map[i];
-			if (need_downsampling)
+			features_map[i] = Eigen::MatrixXd();
+			if (feature_type == "fpfh" || feature_type == "FPFH")
 			{
-				downsampled_vc = igl::slice(vc_map[i], downsampled_id_map[i], 1);
+				FeatureAlg::compute_fpfh(downsampled_v_map[i], downsampled_vn_map[i], features_map[i]);
 			}
-			FeatureAlg::compute_shot(downsampled_v_map[i], v_map[i], vn_map[i], downsampled_vc, vc_map[i], features_map[i]);
+			else if (feature_type == "shot" || feature_type == "SHOT")
+			{
+				Eigen::MatrixXd downsampled_vc = vc_map[i];
+				if (need_downsampling)
+				{
+					downsampled_vc = igl::slice(vc_map[i], downsampled_id_map[i], 1);
+				}
+				FeatureAlg::compute_shot(downsampled_v_map[i], v_map[i], vn_map[i], downsampled_vc, vc_map[i], features_map[i]);
+			}
 		}
-		igl::readDMAT(feature_filenames[i], features_map[i]);
+		else
+		{
+			igl::readDMAT(feature_filenames[i], features_map[i]);
+		}
+
 
 		feature_mask_map[i] = features_map[i].col(0).array().isNaN() == false;
 		const int valid_feature_num = feature_mask_map[i].count();
@@ -544,7 +551,7 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 					corres_mat_map[i][j](k, 0) = corres_map[i][j][k].first;
 					corres_mat_map[i][j](k, 1) = corres_map[i][j][k].second;
 				}
-				igl::writeDMAT(feature_type + "_" + std::to_string(i) + "_" + std::to_string(j) + "_corres.dmat", corres_mat_map[i][j]);
+				//igl::writeDMAT(feature_type + "_" + std::to_string(i) + "_" + std::to_string(j) + "_corres.dmat", corres_mat_map[i][j]);
 			}
 		}
 	}
@@ -566,11 +573,10 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 	std::cout << "FGR: " << (clock() - begin) / (double)CLOCKS_PER_SEC << "s" << std::endl;
 	for(const auto& ele : trans_mat_map)
 	{
-		std::cout << ele.second << std::endl;
-		system("pause");
+		std::cout << ele.second << std::endl << std::endl;
 		Eigen::MatrixXd aligned_v = (v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
 		Eigen::MatrixXd aligned_vn = (vn_map[ele.first] * ele.second.block<3, 3>(0, 0)).eval().leftCols(3);
-		DataIO::write_ply("alined_" + std::to_string(ele.first) + ".ply", aligned_v, vc_map[ele.first], aligned_vn);
+		DataIO::write_ply("aligned_" + std::to_string(ele.first) + ".ply", aligned_v, vc_map[ele.first], aligned_vn);
 	}
 
 	return;
