@@ -394,12 +394,30 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 
 	std::map<int, Eigen::MatrixXd> v_map, vc_map, vn_map;
 
+	Eigen::MatrixXd pc_colors;
+	Eigen::VectorXd pc_ids = BaseAlg::generate_random_ids(pointcloud_filenames.size()).cast<double>();
+
+	igl::jet(pc_ids, true, pc_colors);
+	pc_colors *= 255;
+
 	for(int i = 0; i < point_cloud_num; ++i)
 	{
 		v_map[i] = Eigen::MatrixXd();
 		vc_map[i] = Eigen::MatrixXd();
 		vn_map[i] = Eigen::MatrixXd();
 		DataIO::read_ply(pointcloud_filenames[i], v_map[i], vc_map[i], vn_map[i]);
+		if(vc_map[i].isZero())
+		{
+			vc_map[i].setOnes();
+			vc_map[i].col(0) *= pc_colors(i, 0);
+			vc_map[i].col(1) *= pc_colors(i, 1);
+			vc_map[i].col(2) *= pc_colors(i, 2);
+		}
+	}
+
+	for (int i = 0; i < point_cloud_num; ++i)
+	{
+		DataIO::write_ply("source_" + std::to_string(i) + ".ply", v_map[i], vc_map[i], vn_map[i]);
 	}
 
 	clock_t begin = clock();
@@ -551,7 +569,23 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 					corres_mat_map[i][j](k, 0) = corres_map[i][j][k].first;
 					corres_mat_map[i][j](k, 1) = corres_map[i][j][k].second;
 				}
-				//igl::writeDMAT(feature_type + "_" + std::to_string(i) + "_" + std::to_string(j) + "_corres.dmat", corres_mat_map[i][j]);
+
+				//Eigen::MatrixXd corres_v_1, corres_vn_1, corres_v_2, corres_vn_2;
+				//corres_v_1 = igl::slice(downsampled_v_map[i], corres_mat_map[i][j].col(0), 1);
+				//corres_vn_1 = igl::slice(downsampled_vn_map[i], corres_mat_map[i][j].col(0), 1);
+				//corres_v_2 = igl::slice(downsampled_v_map[j], corres_mat_map[i][j].col(1), 1);
+				//corres_vn_2 = igl::slice(downsampled_vn_map[j], corres_mat_map[i][j].col(1), 1);
+
+				////visualize the feature correspondences
+				//Eigen::MatrixXd vcolor;
+				//igl::jet(corres_v_1.col(0), true, vcolor);
+				//vcolor *= 255;
+
+				//DataIO::write_ply(feature_type + "_feature_1.ply", corres_v_1, vcolor, corres_vn_1);
+				//DataIO::write_ply(feature_type + "_feature_2.ply", corres_v_2, vcolor, corres_vn_2);
+				//system("pause");
+
+				////igl::writeDMAT(feature_type + "_" + std::to_string(i) + "_" + std::to_string(j) + "_corres.dmat", corres_mat_map[i][j]);
 			}
 		}
 	}
@@ -571,13 +605,35 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 	begin = clock();
 	FastGlobalRegistration::optimize_global(true, 128, downsampled_v_map, corres_map, trans_mat_map);
 	std::cout << "FGR: " << (clock() - begin) / (double)CLOCKS_PER_SEC << "s" << std::endl;
+	std::map<int, Eigen::MatrixXd> aligned_v_map;
+	std::map<int, Eigen::MatrixXd> aligned_downsampled_v_map;
 	for(const auto& ele : trans_mat_map)
 	{
 		std::cout << ele.second << std::endl << std::endl;
-		Eigen::MatrixXd aligned_v = (v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
+		aligned_v_map[ele.first] = (v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
+		aligned_downsampled_v_map[ele.first] = (downsampled_v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
 		Eigen::MatrixXd aligned_vn = (vn_map[ele.first] * ele.second.block<3, 3>(0, 0)).eval().leftCols(3);
-		DataIO::write_ply("aligned_" + std::to_string(ele.first) + ".ply", aligned_v, vc_map[ele.first], aligned_vn);
+		DataIO::write_ply("aligned_" + std::to_string(ele.first) + ".ply", aligned_v_map[ele.first], vc_map[ele.first], aligned_vn);
 	}
 
+	std::ofstream out;
+	out.open("ratio.txt");
+	double total_accept_num = 0;
+	int total_feature_num = 0;;
+	for (int i = 0; i < pointcloud_filenames.size(); ++i)
+	{
+		for (int j = i + 1; j < pointcloud_filenames.size(); ++j)
+		{
+			const Eigen::MatrixXd corres_v_1 = igl::slice(aligned_downsampled_v_map[i], corres_mat_map[i][j].col(0), 1);
+			const Eigen::MatrixXd corres_v_2 = igl::slice(aligned_downsampled_v_map[j], corres_mat_map[i][j].col(1), 1);
+			Eigen::VectorXd distances = (corres_v_1 - corres_v_2).rowwise().norm();
+			double accept_num = (distances.array() < 2e-2).count();
+			total_accept_num += accept_num;
+			total_feature_num += distances.rows();
+			out << i << " and " << j << " accept ratio: " << accept_num / distances.rows() << " (Total Num: " << distances.rows() << ")" << std::endl;
+		}
+	}
+	out << "Overall ratio: " << total_accept_num / total_feature_num <<" (Total Num: " << total_feature_num << ")" << std::endl;
+	out.close();
 	return;
 }

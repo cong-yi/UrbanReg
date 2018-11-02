@@ -14,6 +14,8 @@ namespace BaseAlg
 	BASEALG_PUBLIC Eigen::VectorXi find_nearest_neighbour(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::VectorXd& distances);
 	//return the sampled indices for slicing
 	BASEALG_PUBLIC Eigen::VectorXi downsampling(int total_num, int downsampling_num);
+	//generate random ids from 0~num-1
+	BASEALG_PUBLIC Eigen::VectorXi generate_random_ids(int num);
 }
 
 #endif

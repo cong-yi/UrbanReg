@@ -3,6 +3,7 @@
 #include <SymEigsSolver.h>
 #include <flann/flann.hpp>
 #include <random>
+#include <igl/jet.h>
 
 void BaseAlg::icp(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, Eigen::MatrixXd& aligned_v_2)
 {
@@ -171,4 +172,17 @@ Eigen::VectorXi BaseAlg::downsampling(int total_num, int downsampling_num)
 		++counter;
 	}
 	return downsampled_ids;
+}
+
+Eigen::VectorXi BaseAlg::generate_random_ids(int num)
+{
+	Eigen::VectorXi ids = Eigen::VectorXi::LinSpaced(num, 0, num - 1);
+	std::random_device rd;
+	for (int i = 0; i < num; ++i)
+	{
+		std::uniform_int_distribution<> dist(i, num - 1);
+		int id = dist(rd);
+		std::swap(*(ids.data() + i), *(ids.data() + id));
+	}
+	return ids;
 }

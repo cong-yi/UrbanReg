@@ -22,7 +22,9 @@ int DataIO::read_ply(const std::string& filename, Eigen::MatrixXd& v, Eigen::Mat
 	long nvertices = ply_set_read_cb(ply, "vertex", "x", nullptr, nullptr, 0);
 	v.resize(nvertices, 3);
 	vc.resize(nvertices, 3);
+	vc.setZero();
 	vn.resize(nvertices, 3);
+	vn.setZero();
 	//vertex call back function
 	auto read_ply_vertex_call_back = [](p_ply_argument argument)->int
 	{
