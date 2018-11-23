@@ -7,9 +7,11 @@ set(REGPIPELINE_SRC_FILES
 	src/registration_pipeline.cpp
 	)
 
-include_directories("${REGPIPELINE_DIR}/include;${PROJECT_SOURCE_DIR}")
+find_package(Boost COMPONENTS system filesystem REQUIRED)
+	
+include_directories("${REGPIPELINE_DIR}/include;${PROJECT_SOURCE_DIR};${Boost_INCLUDE_DIR}")
 add_library(RegistrationPipeline SHARED ${REGPIPELINE_INC_FILES} ${REGPIPELINE_SRC_FILES})
-target_link_libraries(RegistrationPipeline PUBLIC SSICP GPS OverlapTrimmer DataIO GoICP BaseAlg FastGlobalRegistration FeatureAlg)
+target_link_libraries(RegistrationPipeline PUBLIC SSICP GPS OverlapTrimmer DataIO GoICP BaseAlg FastGlobalRegistration FeatureAlg  ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY})
 add_definitions(-DREGPIPELINE_EXPORT)
 file( WRITE "${CMAKE_CURRENT_BINARY_DIR}/RegistrationPipeline.vcxproj.user" 
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>     \

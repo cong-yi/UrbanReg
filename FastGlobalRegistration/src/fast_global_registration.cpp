@@ -12,12 +12,13 @@
 #define USE_ABSOLUTE_SCALE	0		// Measure distance in absolute scale (1) or in scale relative to the diameter of the model (0)
 #define MAX_CORR_DIST		0.0001	// Maximum correspondence distance (also see comment of USE_ABSOLUTE_SCALE)
 #define TUPLE_SCALE			0.95	// Similarity measure used for tuples of feature points.
-#define TUPLE_MAX_CNT		1000	// Maximum tuple numbers.
+#define TUPLE_MAX_CNT		6000	// Maximum tuple numbers.
 #define SHOW_DEBUG_INFO
 #define TUPLE_SIMILAR_CRITERIA
+//#define STD_FILTER
 //#define USE_RANSAC
 
-void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
+void SearchFLANNTree(flann::Index<flann::L1<float>>* index,
 	Eigen::VectorXf& input,
 	std::vector<int>& indices,
 	std::vector<float>& dists,
@@ -42,8 +43,6 @@ void SearchFLANNTree(flann::Index<flann::L2<float>>* index,
 
 void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, const Eigen::MatrixXd& fpfh_1, const Eigen::MatrixXd& fpfh_2, std::vector<std::pair<int, int> >& corres)
 {
-	clock_t start = clock();
-	std::cout << "start matching" << std::endl;
 
 	std::vector<const Eigen::MatrixXd *> pointcloud(2);
 	pointcloud[0] = &v_1;
@@ -85,7 +84,8 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 		for (int j = 0; j < dim; j++)
 			dataset_fi[i * dim + j] = static_cast<float>((*features[fi])(i, j));
 
-	flann::Index<flann::L2<float>> feature_tree_i(dataset_mat_fi, flann::KDTreeSingleIndexParams(15));
+	flann::Index<flann::L1<float>> feature_tree_i(dataset_mat_fi, flann::KDTreeSingleIndexParams(15));
+	//flann::Index<flann::L2<float>> feature_tree_i(dataset_mat_fi, flann::KDTreeIndexParams(4));
 	feature_tree_i.buildIndex();
 
 	// build FLANNTree - fj
@@ -99,7 +99,8 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 		for (int j = 0; j < dim; j++)
 			dataset_fj[i * dim + j] = static_cast<float>((*features[fj])(i, j));
 
-	flann::Index<flann::L2<float>> feature_tree_j(dataset_mat_fj, flann::KDTreeSingleIndexParams(15));
+	flann::Index<flann::L1<float>> feature_tree_j(dataset_mat_fj, flann::KDTreeSingleIndexParams(15));
+	//flann::Index<flann::L2<float>> feature_tree_j(dataset_mat_fj, flann::KDTreeIndexParams(4));
 	feature_tree_j.buildIndex();
 
 	bool crosscheck = true;
@@ -285,6 +286,7 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 
 		printf("%d tuples (%d trial, %d actual).\n", cnt, number_of_trial, i);
 		corres.clear();
+#ifdef STD_FILTER
 		//Eigen::Map<Eigen::VectorXd> ratio_vec(&ratios[0], ratios.size());
 		//igl::writeDMAT("ratios.dmat", ratio_vec);
 
@@ -329,11 +331,19 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 				}
 			}
 		}
-		std::vector<std::pair<int, int> > trusted_corres;
-		for(const auto& ele : corres_set)
+		for (const auto& ele : corres_set)
 		{
 			corres.emplace_back(ele);
 		}
+#else
+		for(int itr = 0; itr < corres_tuple.size(); ++itr)
+		{
+			corres.emplace_back(corres_tuple[itr].first, corres_tuple[itr].second);
+		}
+#endif
+
+
+		//std::vector<std::pair<int, int> > trusted_corres;
 		////again we random tuples
 		//std::random_device rd;
 		//std::uniform_int_distribution<> dist_trust(0, trusted_corres.size() - 1);
@@ -451,7 +461,6 @@ void FastGlobalRegistration::advanced_matching(const Eigen::MatrixXd& v_1, const
 	}
 
 	printf("\t[final] matches %d.\n", (int)corres.size());
-	std::cout << "end matching " << static_cast<double>(clock() - start) / CLOCKS_PER_SEC << "s" << std::endl;
 }
 
 double FastGlobalRegistration::optimize_pairwise(bool decrease_mu, int num_iter, const Eigen::MatrixXd& v_1, const Eigen::MatrixXd& v_2, const std::vector<std::pair<int, int> >& corres, Eigen::Matrix4d& trans_mat)
@@ -756,10 +765,10 @@ double FastGlobalRegistration::optimize_global(bool decrease_mu, int num_iter, s
 			trans_mat_map = update_ssicp_global(backup_v_map, corres_map, par);
 		}
 
-		if (itr < 50)
-		{
-			continue;
-		}
+		//if (itr < 50)
+		//{
+		//	continue;
+		//}
 
 		int func_num = 0;
 		for (const auto& outer_ele : corres_map)

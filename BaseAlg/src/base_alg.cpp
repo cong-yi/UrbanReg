@@ -131,7 +131,8 @@ Eigen::VectorXi BaseAlg::find_nearest_neighbour(const Eigen::MatrixXd& v_1, cons
 	flann::Matrix<double> dataset(static_cast<double*>(rowmajor_v_1.data()), v_1.rows(), v_1.cols());
 	//std::cout << rowmajor_v_1 - v_1 << std::endl;
 	// construct an randomized kd-tree index using 4 kd-trees
-	flann::Index<flann::L2<double> > index(dataset, flann::KDTreeIndexParams(4));
+	flann::Index<flann::L2<double> > index(dataset, flann::KDTreeSingleIndexParams(16));
+	std::cout << "build" << std::endl;
 	index.buildIndex();
 
 	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> rowmajor_v_2(v_2);
@@ -139,12 +140,13 @@ Eigen::VectorXi BaseAlg::find_nearest_neighbour(const Eigen::MatrixXd& v_1, cons
 
 	int nn = 1;
 	Eigen::VectorXi ids(v_2.rows());
+	ids.setZero();
 	flann::Matrix<int> indices(static_cast<int*>(ids.data()), query.rows, nn);
 	distances.resize(v_2.rows());
 	flann::Matrix<double> dists(static_cast<double*>(distances.data()), query.rows, nn);
-
+	std::cout << "search" << std::endl;
 	// do a knn search, using 128 checks
-	index.knnSearch(query, indices, dists, nn, flann::SearchParams(128));
+	index.knnSearch(query, indices, dists, nn, flann::SearchParams(32));
 	return ids;
 }
 
@@ -185,4 +187,31 @@ Eigen::VectorXi BaseAlg::generate_random_ids(int num)
 		std::swap(*(ids.data() + i), *(ids.data() + id));
 	}
 	return ids;
+}
+
+bool BaseAlg::colorize_by_distances(const Eigen::MatrixXd& model, const Eigen::MatrixXd& data, Eigen::MatrixXd& data_color, double max_dis, bool is_corresponding)
+{
+	Eigen::VectorXd distances;
+	if(is_corresponding)
+	{
+		if(data.rows() <= model.rows())
+		{
+			distances = (data - model.topRows(data.rows())).rowwise().norm();
+		}
+		else
+		{
+			std::cout << "unmatched input dimension!" << std::endl;
+			return false;
+		}
+	}
+	else
+	{
+		BaseAlg::find_nearest_neighbour(model, data, distances);
+	}
+	if(max_dis < 0)
+	{
+		max_dis = distances.maxCoeff();
+	}
+	igl::colormap(igl::COLOR_MAP_TYPE_PARULA, distances, 0, max_dis, data_color);
+	data_color *= 255;
 }

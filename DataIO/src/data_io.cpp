@@ -5,6 +5,7 @@
 #include <vector>
 #include "rapidxml.hpp"
 #include "rapidxml_utils.hpp"
+#include "rapidxml_print.hpp"
 #include "rply.h"
 #include <json/json.h>
 
@@ -207,10 +208,10 @@ int DataIO::load_gps(const std::string &filename, Eigen::MatrixXd &local)
   return EXIT_SUCCESS;
 }
 
-int DataIO::read_fgr_config(const std::string& filename, std::vector<std::string>& pointcloud_filenames, std::string& feature_type, std::vector<std::string>& feature_filenames, std::string& correspondences_filename, int& downsampling_num, int& pca_component_num)
+int DataIO::read_fgr_config(const std::string& filename, std::vector<std::string>& pointcloud_filenames, std::string& feature_type, std::vector<std::string>& feature_filenames, std::string& correspondences_filename, int& downsampling_num, int& pca_component_num, double& data_scaling_factor, std::string& output_folder)
 {
-	rapidxml::file<char>* xml_file = nullptr;
-	try { xml_file = new rapidxml::file<char>(filename.c_str()); }
+	std::shared_ptr<rapidxml::file<char> > xml_file = nullptr;
+	try { xml_file = std::make_shared<rapidxml::file<char> >(filename.c_str()); }
 	catch (const std::exception& e)
 	{
 		std::cout << e.what() << std::endl;
@@ -221,9 +222,11 @@ int DataIO::read_fgr_config(const std::string& filename, std::vector<std::string
 
 	rapidxml::xml_node<>* pc_node = doc.first_node("point_cloud");
 	rapidxml::xml_node<>* pc_path_node = pc_node->first_node("filename");
+	std::cout << "here" << std::endl;
 	for (pointcloud_filenames.clear(); pc_path_node; pc_path_node = pc_path_node->next_sibling())
 	{
 		pointcloud_filenames.emplace_back(pc_path_node->value());
+		std::cout << pointcloud_filenames.back() << std::endl;
 	}
 
 	rapidxml::xml_node<>* feature_node = doc.first_node("feature");
@@ -239,7 +242,97 @@ int DataIO::read_fgr_config(const std::string& filename, std::vector<std::string
 	rapidxml::xml_node<>* parameters_node = doc.first_node("parameters");
 	downsampling_num = std::stoi(parameters_node->first_attribute("downsampling_num")->value());
 	pca_component_num = std::stoi(parameters_node->first_attribute("pca_component_num")->value());
+	data_scaling_factor = std::stod(parameters_node->first_attribute("data_scaling_factor")->value());
 
+	rapidxml::xml_node<>* output_folder_node = doc.first_node("output_folder");
+	std::cout << "here" << std::endl;
+	output_folder = output_folder_node->first_attribute("name")->value();
+	std::cout<< output_folder << std::endl;
 	doc.clear();
+	return EXIT_SUCCESS;
+}
+
+int DataIO::change_config_attribute(const std::string& filename, const std::string& node_name, const std::string& attribute_name, const std::string& new_value)
+{
+	std::shared_ptr<rapidxml::file<char> > xml_file = nullptr;
+	try { xml_file = std::make_shared<rapidxml::file<char> >(filename.c_str()); }
+	catch (const std::exception& e)
+	{
+		std::cout << e.what() << std::endl;
+		return false;
+	}
+	rapidxml::xml_document<> doc;
+	doc.parse<0>(xml_file->data());
+
+	rapidxml::xml_node<>* target_node = doc.first_node(node_name.c_str());
+	rapidxml::xml_attribute<>* target_attribute = target_node->first_attribute(attribute_name.c_str());
+	target_node->remove_attribute(target_attribute);
+	target_node->append_attribute(doc.allocate_attribute(attribute_name.c_str(), new_value.c_str()));
+
+	std::ofstream fs_file;
+	fs_file.open(filename, std::ofstream::out | std::ofstream::trunc);
+	fs_file << doc;
+	fs_file.close();
+	doc.clear();
+	return EXIT_SUCCESS;
+}
+
+int DataIO::clear_config_node(const std::string& filename, const std::string& node_name, const std::string& subnode_name)
+{
+	std::shared_ptr<rapidxml::file<char> > xml_file = nullptr;
+	try { xml_file = std::make_shared<rapidxml::file<char> >(filename.c_str()); }
+	catch (const std::exception& e)
+	{
+		std::cout << e.what() << std::endl;
+		return false;
+	}
+	rapidxml::xml_document<> doc;
+	doc.parse<0>(xml_file->data());
+
+	rapidxml::xml_node<>* target_parent_node = doc.first_node(node_name.c_str());
+	rapidxml::xml_node<>* target_node = target_parent_node->first_node(subnode_name.c_str());
+	while(target_parent_node->first_node(subnode_name.c_str()))
+	{
+		target_parent_node->remove_node(target_parent_node->first_node(subnode_name.c_str()));
+	}
+
+	std::ofstream fs_file;
+	fs_file.open(filename, std::ofstream::out | std::ofstream::trunc);
+	fs_file << doc;
+	fs_file.close();
+	doc.clear();
+	return EXIT_SUCCESS;
+}
+
+int DataIO::add_config_node(const std::string& filename, const std::string& node_name, const std::string& subnode_name, const std::string& new_value)
+{
+	std::shared_ptr<rapidxml::file<char> > xml_file = nullptr;
+	try { xml_file = std::make_shared<rapidxml::file<char> >(filename.c_str()); }
+	catch (const std::exception& e)
+	{
+		std::cout << e.what() << std::endl;
+		return false;
+	}
+	rapidxml::xml_document<> doc;
+	doc.parse<0>(xml_file->data());
+
+	rapidxml::xml_node<>* target_parrent_node = doc.first_node(node_name.c_str());
+	rapidxml::xml_node<>* new_node = doc.allocate_node(rapidxml::node_element, subnode_name.c_str(), new_value.c_str());
+	target_parrent_node->append_node(new_node);
+
+	std::ofstream fs_file;
+	fs_file.open(filename, std::ofstream::out | std::ofstream::trunc);
+	fs_file << doc;
+	fs_file.close();
+	doc.clear();
+	return EXIT_SUCCESS;
+}
+
+int DataIO::write_file(const std::string& filename, double value)
+{
+	std::ofstream out;
+	out.open(filename, std::fstream::out);
+	out << value;
+	out.close();
 	return EXIT_SUCCESS;
 }

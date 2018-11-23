@@ -154,7 +154,8 @@ void FeatureAlg::compute_shot(const Eigen::MatrixXd& v, const Eigen::MatrixXd& v
 	//shotEstimation.setSearchSurface(cloud);
 
 	pcl::PointCloud<ShotFeature>::Ptr shotFeatures(new pcl::PointCloud<ShotFeature>);
-	shotEstimation.setRadiusSearch (0.1);
+	double feature_radius = 0.05 * (v.colwise().maxCoeff() - v.colwise().minCoeff()).norm();
+	shotEstimation.setRadiusSearch (feature_radius);
 
 	// Actually compute the spin images
 	shotEstimation.compute(*shotFeatures);
@@ -215,13 +216,16 @@ void FeatureAlg::compute_shot(const Eigen::MatrixXd& downsampled_v, const Eigen:
 	}
 	// Setup the SHOT features
 	typedef pcl::SHOT1344 ShotFeature;
+	//typedef pcl::SHOT352 ShotFeature;
 	pcl::SHOTColorEstimationOMP<pcl::PointXYZRGB, pcl::Normal, ShotFeature> shotEstimation;
+	//pcl::SHOTEstimationOMP<pcl::PointXYZRGB, pcl::Normal, ShotFeature> shotEstimation;
 	shotEstimation.setInputCloud(downsampled_cloud);
 	shotEstimation.setInputNormals(normals);
 	shotEstimation.setSearchSurface(search_surface);
 
 	pcl::PointCloud<ShotFeature>::Ptr shotFeatures(new pcl::PointCloud<ShotFeature>);
-	shotEstimation.setRadiusSearch(0.1);
+	double feature_radius = 0.05 * (v.colwise().maxCoeff() - v.colwise().minCoeff()).norm();
+	shotEstimation.setRadiusSearch(feature_radius);
 
 	// Actually compute the spin images
 	shotEstimation.compute(*shotFeatures);

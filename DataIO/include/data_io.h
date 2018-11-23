@@ -14,7 +14,11 @@ namespace DataIO
 	DATAIO_PUBLIC int read_ply(const std::string& filename, Eigen::MatrixXd& v, Eigen::MatrixXd& vc, Eigen::MatrixXd& vn);
 	DATAIO_PUBLIC int write_ply(const std::string& filename, const Eigen::MatrixXd& v, const Eigen::MatrixXd& vc, const Eigen::MatrixXd& vn);
 	DATAIO_PUBLIC int load_gps(const std::string &filename, Eigen::MatrixXd &local);
-	DATAIO_PUBLIC int read_fgr_config(const std::string& filename, std::vector<std::string>& pointcloud_filenames, std::string& feature_type, std::vector<std::string>& feature_filenames, std::string& correspondences_filename, int& downsampling_num, int& pca_component_num);
+	DATAIO_PUBLIC int read_fgr_config(const std::string& filename, std::vector<std::string>& pointcloud_filenames, std::string& feature_type, std::vector<std::string>& feature_filenames, std::string& correspondences_filename, int& downsampling_num, int& pca_component_num, double& data_scaling_factor, std::string& output_folder);
+	DATAIO_PUBLIC int change_config_attribute(const std::string& filename, const std::string& node_name, const std::string& atrribute_name, const std::string& new_value);
+	DATAIO_PUBLIC int clear_config_node(const std::string& filename, const std::string& node_name, const std::string& subnode_name);
+	DATAIO_PUBLIC int add_config_node(const std::string& filename, const std::string& node_name, const std::string& subnode_name, const std::string& new_value);
+	DATAIO_PUBLIC int write_file(const std::string& filename, double value);
 }
 
 #endif

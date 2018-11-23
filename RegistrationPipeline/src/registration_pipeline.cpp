@@ -15,8 +15,12 @@
 #include <igl/jet.h>
 #include <igl/readDMAT.h>
 #include <igl/slice_mask.h>
+#include <filesystem>
+#include <boost/filesystem.hpp>
 #include <igl/colormap.h>
 #include <random>
+#include "../../../boost_1_66_0/boost/filesystem/path.hpp"
+#include "../../../boost_1_66_0/boost/filesystem/operations.hpp"
 
 REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::string> &filenames, std::string &format)
 {
@@ -112,17 +116,30 @@ void RegPipeline::PointCloudRegistrationUsingGoICP(const std::string& config_fil
 	std::vector<std::string> pointcloud_filenames;
 	std::vector<std::string> feature_filenames;
 	std::string correspondences_filename;
+	std::string output_folder;
 	int downsampling_num;
 	int pca_component_num;
+	double data_scaling_factor;
 
-	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num);
+	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num, data_scaling_factor, output_folder);
+
+	boost::filesystem::path output_path(output_folder);
+	if (boost::filesystem::exists(output_path) && boost::filesystem::is_directory(output_path))    // does p actually exist?
+	{
+		std::cout << output_path << " exists\n";
+	}
+	else
+	{
+		std::cout << output_path << " does not exist\n";
+	}
+	system("pause");
 
 	Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2;
 
 	DataIO::read_ply(pointcloud_filenames[0], v_1, vc_1, vn_1);
 	DataIO::read_ply(pointcloud_filenames[1], v_2, vc_2, vn_2);
 
-	v_2 = v_2 * 1.2;
+	v_2 = v_2 * data_scaling_factor;
 
 	Eigen::MatrixXd v(v_1.rows() + v_2.rows(), 3);
 	v.topRows(v_1.rows()) = v_1;
@@ -148,10 +165,12 @@ void RegPipeline::PointCloudRegistrationUsingScaleFGR(const std::string& config_
 	std::vector<std::string> pointcloud_filenames;
 	std::vector<std::string> feature_filenames;
 	std::string correspondences_filename;
+	std::string output_folder;
 	int downsampling_num;
 	int pca_component_num;
+	double data_scaling_factor;
 
-	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num);
+	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num, data_scaling_factor, output_folder);
 
 	Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2;
 
@@ -385,11 +404,27 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 	std::vector<std::string> pointcloud_filenames;
 	std::vector<std::string> feature_filenames;
 	std::string correspondences_filename;
+	std::string output_folder;
 	int downsampling_num;
 	int pca_component_num;
+	double data_scaling_factor;
 
-	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num);
+	DataIO::read_fgr_config(config_filename, pointcloud_filenames, feature_type, feature_filenames, correspondences_filename, downsampling_num, pca_component_num, data_scaling_factor, output_folder);
+	std::cout << output_folder << std::endl;
 
+	//boost::filesystem::path output_path(output_folder + "\\" + std::to_string(downsampling_num));
+	boost::filesystem::path output_path(output_folder);
+	if (boost::filesystem::exists(output_path) && boost::filesystem::is_directory(output_path))    // does p actually exist?
+	{
+		std::cout << output_path << " exists\n";
+		return;
+	}
+	else
+	{
+		std::cout << output_path << " does not exist\n";
+		boost::filesystem::create_directory(output_path);
+	}
+	
 	int point_cloud_num = pointcloud_filenames.size();
 
 	std::map<int, Eigen::MatrixXd> v_map, vc_map, vn_map;
@@ -414,11 +449,11 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 			vc_map[i].col(2) *= pc_colors(i, 2);
 		}
 	}
-
-	for (int i = 0; i < point_cloud_num; ++i)
-	{
-		DataIO::write_ply("source_" + std::to_string(i) + ".ply", v_map[i], vc_map[i], vn_map[i]);
-	}
+	v_map[1] *= data_scaling_factor;
+	//for (int i = 0; i < point_cloud_num; ++i)
+	//{
+	//	DataIO::write_ply(output_path.string() + "\\source_" + std::to_string(i) + ".ply", v_map[i], vc_map[i], vn_map[i]);
+	//}
 
 	clock_t begin = clock();
 	bool need_downsampling = true;
@@ -454,6 +489,7 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 	std::map<int, Eigen::MatrixXd> filtered_features_map;
 	std::map<int, Eigen::MatrixXd> filtered_v_map;
 	std::map<int, Eigen::Array<bool, Eigen::Dynamic, 1> > feature_mask_map;
+	std::map<int, double> shot_times;
 	for(int i = 0; i < pointcloud_filenames.size(); ++i)
 	{
 		downsampled_v_map[i] = v_map[i];
@@ -478,11 +514,24 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 				{
 					downsampled_vc = igl::slice(vc_map[i], downsampled_id_map[i], 1);
 				}
+				clock_t start = clock();
 				FeatureAlg::compute_shot(downsampled_v_map[i], v_map[i], vn_map[i], downsampled_vc, vc_map[i], features_map[i]);
+				shot_times[i] = static_cast<double>(clock() - start) / CLOCKS_PER_SEC;
+				std::cout << "end shot computation" << std::endl;
 			}
+			igl::writeDMAT(output_path.string() + "\\downsample_ids_" + std::to_string(i) + ".dmat", downsampled_id_map[i], false);
+			//igl::writeDMAT(output_path.string() + "\\" + feature_type + "_" + std::to_string(i) + ".dmat", features_map[i], false);
 		}
 		else
 		{
+			downsampled_v_map[i] = v_map[i];
+			downsampled_vn_map[i] = vn_map[i];
+			if (need_downsampling)
+			{
+				igl::readDMAT("downsample_ids_" + std::to_string(i) + ".dmat", downsampled_id_map[i]);
+				downsampled_v_map[i] = igl::slice(v_map[i], downsampled_id_map[i], 1);
+				downsampled_vn_map[i] = igl::slice(vn_map[i], downsampled_id_map[i], 1);
+			}
 			igl::readDMAT(feature_filenames[i], features_map[i]);
 		}
 
@@ -495,6 +544,8 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 	}
 	std::map<int, std::map<int, std::vector<std::pair<int, int> > > > corres_map;
 	std::map<int, std::map<int, Eigen::MatrixXi> > corres_mat_map;
+	std::map<int, std::map<int, double> > pca_time;
+	std::map<int, std::map<int, double> > corres_time;
 	if (correspondences_filename == "")
 	{
 		for (int i = 0; i < pointcloud_filenames.size(); ++i)
@@ -510,7 +561,7 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 
 				if (pca_component_num > 0)
 				{
-					std::cout << "start pca computation" << std::endl;
+					std::cout << "start pca computation (target dimension: " << pca_component_num << ")" << std::endl;
 					Eigen::MatrixXd filtered_features(num_i + num_j, features_map[i].cols());
 
 					filtered_features.topRows(num_i) = filtered_features_map[i];
@@ -518,18 +569,22 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 
 					Eigen::VectorXd eigenvalues;
 					Eigen::MatrixXd eigenvectors;
-
+					clock_t start = clock();
 					BaseAlg::pca(filtered_features, pca_component_num, eigenvalues, eigenvectors);
 
 					Eigen::MatrixXd feature_pca = filtered_features * eigenvectors;
-
+					pca_time[i][j] = static_cast<double>(clock() - start) / CLOCKS_PER_SEC;
 					std::cout << "end pca computation" << std::endl;
 
 					features_map[i] = feature_pca.topRows(num_i);
 					features_map[j] = feature_pca.bottomRows(num_j);
 				}
 				corres_map[i][j] = std::vector<std::pair<int, int> >();
+				clock_t start = clock();
+				std::cout << "start matching" << std::endl;
 				FastGlobalRegistration::advanced_matching(filtered_v_map[i], filtered_v_map[j], features_map[i], features_map[j], corres_map[i][j]);
+				corres_time[i][j] = static_cast<double>(clock() - start) / CLOCKS_PER_SEC;
+				std::cout << "end matching " << corres_time[i][j] << "s" << std::endl;
 				//An O(n) method to shift back to the original vertex indices before filering NaN elements
 				Eigen::VectorXi offset_i(features_map[i].rows());
 				int id_offset = 0;
@@ -569,6 +624,7 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 					corres_mat_map[i][j](k, 0) = corres_map[i][j][k].first;
 					corres_mat_map[i][j](k, 1) = corres_map[i][j][k].second;
 				}
+				igl::writeDMAT(output_path.string() + "\\" + feature_type + "_" + std::to_string(i) + "_" +std::to_string(j) + "_corres.dmat", corres_mat_map[i][j]);
 
 				//Eigen::MatrixXd corres_v_1, corres_vn_1, corres_v_2, corres_vn_2;
 				//corres_v_1 = igl::slice(downsampled_v_map[i], corres_mat_map[i][j].col(0), 1);
@@ -581,8 +637,8 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 				//igl::jet(corres_v_1.col(0), true, vcolor);
 				//vcolor *= 255;
 
-				//DataIO::write_ply(feature_type + "_feature_1.ply", corres_v_1, vcolor, corres_vn_1);
-				//DataIO::write_ply(feature_type + "_feature_2.ply", corres_v_2, vcolor, corres_vn_2);
+				//DataIO::write_ply(output_path.string() + "\\" + feature_type + "_feature_1.ply", corres_v_1, vcolor, corres_vn_1);
+				//DataIO::write_ply(output_path.string() + "\\" + feature_type + "_feature_2.ply", corres_v_2, vcolor, corres_vn_2);
 				//system("pause");
 
 				////igl::writeDMAT(feature_type + "_" + std::to_string(i) + "_" + std::to_string(j) + "_corres.dmat", corres_mat_map[i][j]);
@@ -604,7 +660,9 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 	
 	begin = clock();
 	FastGlobalRegistration::optimize_global(true, 128, downsampled_v_map, corres_map, trans_mat_map);
-	std::cout << "FGR: " << (clock() - begin) / (double)CLOCKS_PER_SEC << "s" << std::endl;
+	double fgr_time = static_cast<double>(clock() - begin) / CLOCKS_PER_SEC;
+	std::cout << "FGR: " << fgr_time << "s" << std::endl;
+
 	std::map<int, Eigen::MatrixXd> aligned_v_map;
 	std::map<int, Eigen::MatrixXd> aligned_downsampled_v_map;
 	for(const auto& ele : trans_mat_map)
@@ -613,11 +671,27 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 		aligned_v_map[ele.first] = (v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
 		aligned_downsampled_v_map[ele.first] = (downsampled_v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
 		Eigen::MatrixXd aligned_vn = (vn_map[ele.first] * ele.second.block<3, 3>(0, 0)).eval().leftCols(3);
-		DataIO::write_ply("aligned_" + std::to_string(ele.first) + ".ply", aligned_v_map[ele.first], vc_map[ele.first], aligned_vn);
+		DataIO::write_ply(output_path.string() + "\\" + "aligned_" + std::to_string(ele.first) + ".ply", aligned_v_map[ele.first], vc_map[ele.first], aligned_vn);
+		igl::writeDMAT(output_path.string() + "\\" + "transmat_" + std::to_string(ele.first) + ".dmat", ele.second);
 	}
 
+	double ssicp_time = 0;
+	//if (point_cloud_num == 2)
+	//{
+	//	Eigen::MatrixXd aligned_v2 = (v_map[1].rowwise().homogeneous() * trans_mat_map[1].transpose()).eval().leftCols(3);
+	//	begin = clock();
+	//	Eigen::Matrix4d ssicp_trans = SSICP::GetOptimalTrans(aligned_v2, v_map[0], 1e-2, 1e-3);
+	//	ssicp_time = static_cast<double>(clock() - begin) / CLOCKS_PER_SEC;
+	//	Eigen::Matrix4d final_trans = ssicp_trans * trans_mat_map[1].eval();
+	//	Eigen::MatrixXd ssicp_v2 = (v_map[1].rowwise().homogeneous() * final_trans.transpose()).eval().leftCols(3);
+	//	//aligned_downsampled_v_map[ele.first] = (downsampled_v_map[ele.first].rowwise().homogeneous() * ele.second.transpose()).eval().leftCols(3);
+	//	Eigen::MatrixXd aligned_vn = (vn_map[1] * final_trans.block<3, 3>(0, 0)).eval().leftCols(3);
+	//	DataIO::write_ply(output_path.string() + "\\" + "aligned_ssicp.ply", ssicp_v2, vc_map[1], aligned_vn);
+	//	igl::writeDMAT(output_path.string() + "\\" + "final_transmat_1.dmat", final_trans);
+	//}
+
 	std::ofstream out;
-	out.open("ratio.txt");
+	out.open(output_path.string() + "\\" + "info.txt", std::fstream::out);
 	double total_accept_num = 0;
 	int total_feature_num = 0;;
 	for (int i = 0; i < pointcloud_filenames.size(); ++i)
@@ -631,6 +705,12 @@ void RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR(const std::string&
 			total_accept_num += accept_num;
 			total_feature_num += distances.rows();
 			out << i << " and " << j << " accept ratio: " << accept_num / distances.rows() << " (Total Num: " << distances.rows() << ")" << std::endl;
+			out << pca_time[i][j] << "s for PCA;" << std::endl;
+			out << corres_time[i][j] << "s for build correspondences." << std::endl;
+			out << shot_times[i] << "s for computing shot descriptors." << std::endl;
+			out << fgr_time << "s for sfgr optimization." << std::endl;
+			out << ssicp_time << "s for Scale-ICP." << std::endl;
+			out << "scaling factor: " << data_scaling_factor << std::endl;
 		}
 	}
 	out << "Overall ratio: " << total_accept_num / total_feature_num <<" (Total Num: " << total_feature_num << ")" << std::endl;

@@ -135,11 +135,155 @@ void convert_trans_to_rmse(const std::string& point_cloud_a, const std::string& 
 	igl::writeDMAT(output_rmse, rmse);
 }
 
+void convert_batch_files_to_vis_data()
+{
+	Eigen::MatrixXd v1, vc1, vn1, v2, vc2, vn2;
+	DataIO::read_ply("E:\\Documents\\Chinagraph2018\\new_data\\pca_validation\\620\\aligned_0.ply", v1, vc1, vn1);
+	DataIO::read_ply("E:\\Documents\\Chinagraph2018\\new_data\\pca_validation\\620\\aligned_1.ply", v2, vc2, vn2);
+	//Eigen::VectorXi downsampled_id_1, downsampled_id_2;
+	//igl::readDMAT("E:\\Projects\\UrbanReg\\build\\bin\\Release\\downsample_ids_0.dmat", downsampled_id_1);
+	//igl::readDMAT("E:\\Projects\\UrbanReg\\build\\bin\\Release\\downsample_ids_1.dmat", downsampled_id_2);
+
+	//Eigen::MatrixXd downsampled_v1 = igl::slice(v1, downsampled_id_1, 1);
+	//Eigen::MatrixXd downsampled_v2 = igl::slice(v2, downsampled_id_2, 1);
+
+	namespace fs = boost::filesystem;
+
+	std::map<int, double> ratio_map;
+	std::map<int, double> pca_time_map;
+	std::map<int, double> matching_time_map;
+	std::map<int, double> feature_time_map;
+
+	std::string path = "E:\\Documents\\Chinagraph2018\\new_data\\fpfh_validation";
+	for (auto & p : fs::directory_iterator(path))
+	{
+		//std::cout << p << std::endl;
+		if (!fs::is_directory(p.path()))
+		{
+
+			continue;
+		}
+
+		for (fs::directory_iterator itr(p); itr != fs::directory_iterator(); ++itr)
+		{
+			std::string temp_string = itr->path().filename().string();
+
+			std::cout << temp_string << std::endl;
+
+			if (temp_string == "shot_0_1_corres.dmat" || temp_string == "fpfh_0_1_corres.dmat")
+			{
+				std::cout << std::stoi(p.path().filename().string()) << std::endl;;
+				Eigen::VectorXi downsampled_id_1, downsampled_id_2;
+				igl::readDMAT(p.path().string() + "\\" + "downsample_ids_0.dmat", downsampled_id_1);
+				igl::readDMAT(p.path().string() + "\\" + "downsample_ids_1.dmat", downsampled_id_2);
+
+				Eigen::MatrixXd downsampled_v1 = igl::slice(v1, downsampled_id_1, 1);
+				Eigen::MatrixXd downsampled_v2 = igl::slice(v2, downsampled_id_2, 1);
+				Eigen::MatrixXi corres_mat;
+				std::cout << itr->path().string() << std::endl;
+				igl::readDMAT(itr->path().string(), corres_mat);
+				const Eigen::MatrixXd corres_v_1 = igl::slice(downsampled_v1, corres_mat.col(0), 1);
+				const Eigen::MatrixXd corres_v_2 = igl::slice(downsampled_v2, corres_mat.col(1), 1);
+				Eigen::VectorXd distances = (corres_v_1 - corres_v_2).rowwise().norm();
+				double accept_num = (distances.array() < 2e-2).count();
+				ratio_map[std::stoi(p.path().filename().string())] = accept_num / corres_mat.rows();
+				std::cout << ratio_map[std::stoi(p.path().filename().string())] << std::endl;
+			}
+			else if (temp_string == "ratio.txt")
+			{
+				std::ifstream in(p.path().string() + "\\" + "ratio.txt");
+				std::string word;
+				//in.open(p.path().string() + "\\" + "ratio.txt", std::fstream::in);
+				if (in.is_open())
+				{
+					getline(in, word);
+					in >> word;
+					word.pop_back();
+					pca_time_map[std::stoi(p.path().filename().string())] = std::stod(word);
+					getline(in, word);
+					in >> word;
+					word.pop_back();
+					matching_time_map[std::stoi(p.path().filename().string())] = std::stod(word);
+					getline(in, word);
+					in >> word;
+					word.pop_back();
+					feature_time_map[std::stoi(p.path().filename().string())] = std::stod(word);
+					in.close();
+				}
+			}
+		}
+	}
+
+	Eigen::MatrixXd ratios(ratio_map.size(), 2);
+	int counter = 0;
+	for (auto& ele : ratio_map)
+	{
+		ratios(counter, 0) = ele.first;
+		ratios(counter, 1) = ele.second;
+		counter++;
+	}
+
+	Eigen::MatrixXd pca_time_mat(pca_time_map.size(), 2);
+	counter = 0;
+	for (auto& ele : pca_time_map)
+	{
+		pca_time_mat(counter, 0) = ele.first;
+		pca_time_mat(counter, 1) = ele.second;
+		counter++;
+	}
+
+	Eigen::MatrixXd matching_time_mat(matching_time_map.size(), 2);
+	counter = 0;
+	for (auto& ele : matching_time_map)
+	{
+		matching_time_mat(counter, 0) = ele.first;
+		matching_time_mat(counter, 1) = ele.second;
+		counter++;
+	}
+
+	Eigen::MatrixXd feature_time_mat(feature_time_map.size(), 2);
+	counter = 0;
+	for (auto& ele : feature_time_map)
+	{
+		feature_time_mat(counter, 0) = ele.first;
+		feature_time_mat(counter, 1) = ele.second;
+		counter++;
+	}
+
+	igl::writeDMAT(path +"\\ratios.dmat", ratios);
+	igl::writeDMAT(path + "\\pca_time.dmat", pca_time_mat);
+	igl::writeDMAT(path + "\\matching_time.dmat", matching_time_mat);
+	igl::writeDMAT(path + "\\feature_time.dmat", feature_time_mat);
+}
+
+Eigen::Matrix4d read_gt_mat(const std::string& filename)
+{
+	std::ifstream in(filename);
+	std::string word;
+	Eigen::Matrix4d trans_mat;
+	if (in.is_open())
+	{
+		getline(in, word);
+		for(int i = 0; i < 15; ++i)
+		{
+			in >> word;
+			trans_mat(i / 4, i % 4) = std::stod(word);
+		}
+	}
+	return trans_mat;
+}
+
 void main()
 {
 	//Eigen::MatrixXd v1, vc1, vn1;
 	//Eigen::MatrixXi f1;
-	//DataIO::read_ply("E:\\Models\\cloud_and_poses2.ply", v1, vc1, vn1);
+	//DataIO::read_ply("G:\\scene_dense.ply", v1, vc1, vn1);
+	//std::cout << "read ply finished" << std::endl;
+	//Eigen::VectorXi downsampled_id = BaseAlg::downsampling(v1.rows(), 5e7);
+	//Eigen::MatrixXd downsampled_v = igl::slice(v1, downsampled_id, 1);
+	//Eigen::MatrixXd downsampled_vc = igl::slice(vc1, downsampled_id, 1);
+	//Eigen::MatrixXd downsampled_vn = igl::slice(vn1, downsampled_id, 1);
+	//DataIO::write_ply("E:\\scene_downsampled.ply", downsampled_v, downsampled_vc, downsampled_vn);
 	//Eigen::Matrix4d gt_trans_mat;
 	//gt_trans_mat <<
 	//	1.356538418140138, -0.074346534882401, 0.061055720092299544, -0.11025508026773478,
@@ -165,34 +309,24 @@ void main()
 	//system("pause");
 
 	//Eigen::MatrixXd v, vc, vn;
-	//DataIO::read_ply("E:\\Projects\\UrbanReg\\build\\bin\\Release\\lucy.ply", v, vc, vn);
-	//std::cout << v.rows() << " " << v.cols() << std::endl;
-	//for(int i = 1; i <= 10; ++i)
-	//{
-	//	Eigen::MatrixXd down_sampled_v, down_sampled_vc, down_sample_vn;
-	//	down_sampled_v.resize(v.rows() / std::pow(2, i), 3);
-	//	down_sampled_vc.resize(v.rows() / std::pow(2, i), 3);
-	//	down_sample_vn.resize(v.rows() / std::pow(2, i), 3);
-	//	std::random_device rd;
-	//	std::uniform_int_distribution<> dist(0, v.rows() - 1);
-	//	std::vector<char> has_sampled(v.rows(), false);
-	//	for (int i = 0; i < down_sampled_v.rows(); ++i)
-	//	{
-	//		int row_id = dist(rd);
-	//		while (has_sampled[row_id])
-	//		{
-	//			row_id = dist(rd);
-	//			printf("has sampled.\n");
-	//		}
-	//		has_sampled[row_id] = true;
-	//		down_sampled_v.row(i) = v.row(row_id);
-	//		down_sampled_vc.row(i) = vc.row(row_id);
-	//		down_sample_vn.row(i) = vn.row(row_id);
-	//	}
-	//	DataIO::write_ply("E:\\Projects\\UrbanReg\\build\\bin\\Release\\lucy"+std::to_string(std::pow(2, i))+".ply", down_sampled_v, down_sampled_vc, down_sample_vn);
-	//}
-
+	//DataIO::read_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\Caterpillar_COLMAP_cropped.ply", v, vc, vn);
+	//Eigen::Matrix4d gt_trans_mat;
+	//gt_trans_mat <<
+	//	1.033308928464703236e+00, 4.611365568720580260e-02, -1.176860629313055240e+00, 2.060646395531264830e+00,
+	//	1.177421469408414634e+00, -7.818705290307090272e-02, 1.030737706619544447e+00, -5.257332513306570698e-01,
+	//	-2.839178479957314705e-02, -1.564165933406792774e+00, -8.621827554759166345e-02, 1.575946917537108618e+02,
+	//	0.0000000000, 0.0000000000, 0.0000000000, 1.0000000000;
+	//Eigen::MatrixXd aligned_v = (v.rowwise().homogeneous() * gt_trans_mat.transpose()).leftCols(3);
+	//Eigen::MatrixXd aligned_vn = (vn * gt_trans_mat.block<3, 3>(0, 0)).eval().leftCols(3);
+	//DataIO::write_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\Caterpillar_COLMAP_gt.ply", aligned_v, vc, aligned_vn);
 	//return;
+	////Eigen::VectorXi downsampled_id = BaseAlg::downsampling(v.rows(), 1000000);
+	////Eigen::MatrixXd down_sampled_v = igl::slice(v, downsampled_id, 1);
+	////Eigen::MatrixXd down_sampled_vc = igl::slice(vc, downsampled_id, 1);
+	////Eigen::MatrixXd down_sample_vn = igl::slice(vn, downsampled_id, 1);
+	////DataIO::write_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\Caterpillar_relax_1m.ply", down_sampled_v, down_sampled_vc, down_sample_vn);
+	////return;
+	//system("pause");
 
 	//icp_example("E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e44_vn_trimmed.ply", "E:\\Projects\\UrbanReg\\build\\bin\\Release\\out_e55_vn_trimmed.ply");
 
@@ -200,56 +334,79 @@ void main()
 	//fgr_example("out_e44_vn_trimmed.ply", "out_e55_vn_trimmed.ply", "shot", "shot_corres.dmat");
 	//fgr_example("E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_21_rot_05\\Depth_0000.ply", "E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_21_rot_05\\Depth_0001.ply", "fpfh", "");
 
+	namespace fs = boost::filesystem;
 
-	//std::string path = "/path/to/directory";
-	//for (auto & p : fs::directory_iterator(path))
-	//	std::cout << p << std::endl;
+	std::string path = "E:\\Projects\\FastGlobalRegistration\\dataset";
+	std::string output_path = "E:\\Documents\\Chinagraph2018\\new_data\\fgr_dataset_performance";
+	int step_num = 20;
+	double scaling_step = std::pow(9.0, 1.0/step_num);
+	for (auto & p : fs::directory_iterator(path))
+	{
+		//std::cout << p << std::endl;
+		if (!fs::is_directory(p.path()))
+		{
+			continue;
+		}
+		std::string path_string = p.path().string();
+		std::cout << path_string << std::endl;
+		Eigen::MatrixXd v_source, vc_source, vn_source;
+		DataIO::read_ply(path_string + "\\Depth_0001.ply", v_source, vc_source, vn_source);
+		Eigen::Matrix4d gt_mat = read_gt_mat(path_string + "\\gt.log");
+		Eigen::MatrixXd gt_v = (v_source.rowwise().homogeneous() * gt_mat.transpose()).leftCols(3);
+		DataIO::clear_config_node("fgr_test.xml", "point_cloud", "filename");
+		DataIO::add_config_node("fgr_test.xml", "point_cloud", "filename", path_string + "\\Depth_0000.ply");
+		DataIO::add_config_node("fgr_test.xml", "point_cloud", "filename", path_string + "\\Depth_0001.ply");
+		for(int i = 0; i < step_num + 1; ++i)
+		{
+			if (!boost::filesystem::exists(output_path + "\\" + std::to_string(i)))    // does p actually exist?
+			{
+				std::cout << output_path + "\\" + std::to_string(i) << " does not exist\n";
+				boost::filesystem::create_directory(output_path + "\\" + std::to_string(i));
+			}
+			double scaling_factor = 1 / 3.0 * std::pow(scaling_step, i);
+			DataIO::change_config_attribute("fgr_test.xml", "output_folder", "name", output_path + "\\" + std::to_string(i) + "\\" + p.path().filename().string());
+			DataIO::change_config_attribute("fgr_test.xml", "parameters", "data_scaling_factor", std::to_string(scaling_factor));
+			RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+			Eigen::MatrixXd v_1, vc_1, vn_1;
+			DataIO::read_ply(output_path + "\\" + std::to_string(i) + "\\" + p.path().filename().string() + "\\aligned_1.ply", v_1, vc_1, vn_1);
+			double rmse = BaseAlg::rmse(gt_v, v_1);
+			std::cout << "rmse: " << rmse << std::endl;
+			DataIO::write_file(output_path + "\\" + std::to_string(i) + "\\" + p.path().filename().string() + "\\rmse.txt", rmse);
+		}
 
-	//using namespace boost::filesystem;
-	//path p("E:\\Projects\\UrbanReg\\build\\bin\\Release");   // p reads clearer than argv[1] in the following code
-
-	//if (exists(p))    // does p actually exist?
-	//{
-	//	if (is_regular_file(p))        // is p a regular file?   
-	//		std::cout << p << " size is " << file_size(p) << '\n';
-
-	//	else if (is_directory(p))      // is p a directory?
-	//		std::cout << p << "is a directory\n";
-
-	//	else
-	//		std::cout << p << "exists, but is neither a regular file nor a directory\n";
-	//}
-	//else
-	//	std::cout << p << "does not exist\n";
-
-	//for (directory_iterator itr(p); itr != directory_iterator(); ++itr)
-	//{
-	//	std::string temp_string = itr->path().filename().string();
-	//	std::cout << temp_string << ' '; // display filename only
-	//	if (is_regular_file(itr->status())) std::cout << " [" << file_size(itr->path()) << ']';
-	//	std::cout << '\n';
-	//}
+		
+		//DataIO::change_config_attribute("fgr_test.xml", "parameters", "downsampling_num", std::to_string(i * 10000));
+		//RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+	}
+	
 
 	//RegPipeline::PointCloudRegistrationUsingScaleFGR("fgr_test.xml");
-	RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+
+	//convert_batch_files_to_vis_data();
+	//system("pause");
+
+	//for(int i = 11; i < 21; ++i)
+	//{
+	//	DataIO::change_config_attribute("fgr_test.xml", "parameters", "downsampling_num", std::to_string(i * 10000));
+	//	RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+	//}
+	//convert_batch_files_to_vis_data();
+	//RegPipeline::MultiwayPointCloudRegistrationUsingScaleFGR("fgr_test.xml");
+
 	////RegPipeline::PointCloudRegistrationUsingGoICP("fgr_test.xml");
 
 	//convert_trans_to_rmse("E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_10_rot_05\\Depth_0000.ply", "E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_no_noise_10_rot_05\\Depth_0001.ply", "affine_matrix.dmat", "scales.dmat", "rmse.dmat");
 
 
 
-	//Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2;
+	//Eigen::MatrixXd v_1, vc_1, vn_1, v_2, vc_2, vn_2, gt_v, gt_vc, gt_vn;
 
-	//DataIO::read_ply("E:\\Documents\\Chinagraph2018\\data\\visual_comparison\\pairwise_no_noise_21_rot_05\\Scale-FGR\\gt_v2.ply", v_1, vc_1, vn_1);
-	//DataIO::read_ply("E:\\Documents\\Chinagraph2018\\data\\visual_comparison\\pairwise_no_noise_21_rot_05\\Scale-FGR\\scale_fgr_v2.ply", v_2, vc_2, vn_2);
-	//Eigen::VectorXd distances = (v_1 - v_2).rowwise().norm();
-	////BaseAlg::find_nearest_neighbour(v_1, v_2, distances);
+	//DataIO::read_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\sfgr\\aligned_0.ply", v_1, vc_1, vn_1);
+	//DataIO::read_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\sfgr\\aligned_1.ply", v_2, vc_2, vn_2);
+	//DataIO::read_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\sfgr\\Caterpillar_COLMAP_gt.ply", gt_v, gt_vc, gt_vn);
 
-	////visualize the feature correspondences
-	////std::cout << distances.maxCoeff() << std::endl;
-	//igl::colormap(igl::COLOR_MAP_TYPE_PARULA, distances, 0, 0.02, vc_2);
-	//vc_2 *= 255;
-	//DataIO::write_ply("E:\\Documents\\Chinagraph2018\\data\\visual_comparison\\pairwise_no_noise_21_rot_05\\Scale-FGR\\scale_fgr_v2_colored.ply", v_2, vc_2, vn_2);
+
+	//DataIO::write_ply("E:\\Documents\\Chinagraph2018\\new_data\\cross_data\\Caterpillar\\sfgr\\colorized_distances_1.ply", v_2, vc_2, vn_2);
 
 	//convert_trans_to_rmse("E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_noise_xyz_level_02_01_rot_05\\Depth_0000.ply",
 	//	"E:\\Projects\\FastGlobalRegistration\\dataset\\pairwise_noise_xyz_level_02_01_rot_05\\Depth_0001.ply",

@@ -16,6 +16,8 @@ namespace BaseAlg
 	BASEALG_PUBLIC Eigen::VectorXi downsampling(int total_num, int downsampling_num);
 	//generate random ids from 0~num-1
 	BASEALG_PUBLIC Eigen::VectorXi generate_random_ids(int num);
+	//colorize data by the nearest distance from model, data color matrix is range from 0 to 255
+	BASEALG_PUBLIC bool colorize_by_distances(const Eigen::MatrixXd& model, const Eigen::MatrixXd& data, Eigen::MatrixXd& data_color, double max_dis = -1, bool is_corresponding = false);
 }
 
 #endif
