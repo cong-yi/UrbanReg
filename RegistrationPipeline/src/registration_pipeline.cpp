@@ -19,8 +19,8 @@
 #include <boost/filesystem.hpp>
 #include <igl/colormap.h>
 #include <random>
-#include "../../../boost_1_66_0/boost/filesystem/path.hpp"
-#include "../../../boost_1_66_0/boost/filesystem/operations.hpp"
+#include "boost/filesystem/path.hpp"
+#include "boost/filesystem/operations.hpp"
 
 REGPIPELINE_PUBLIC void RegPipeline::LocalizePointCloud(const std::vector<std::string> &filenames, std::string &format)
 {
